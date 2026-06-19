@@ -32,7 +32,32 @@ export function getCustomerName(item: QuoteItem): string {
 
 export function getCustomerId(row: CustomerRow | null): string {
   if (!row) return '';
-  return String(row['客户编号'] ?? row['客户ID'] ?? row.id ?? '').trim();
+  const v = row['客户编号'] ?? row['客户ID'] ?? row.id ?? row.ID ?? row.value;
+  return String(v ?? '').trim();
+}
+
+/** 与列表/搜索回填一致：兼容后端多种字段名 */
+export function getCustomerDisplayName(row: CustomerRow | null): string {
+  if (!row) return '';
+  const v =
+    row['客户名称'] ??
+    row.label ??
+    row.customerName ??
+    row.customer ??
+    row['客户'] ??
+    row.name ??
+    row['简称'] ??
+    row['Name'];
+  return String(v ?? '').trim();
+}
+
+/** 输入框失焦回填用的完整展示串（与下拉展示一致，避免闭包/compare 误判） */
+export function getCustomerCommittedLabel(row: CustomerRow | null): string {
+  if (!row) return '';
+  const nm = getCustomerDisplayName(row);
+  if (nm) return nm;
+  const id = getCustomerId(row);
+  return id ? `客户 #${id}` : '';
 }
 
 export function formatOfferDate(d: Date): string {

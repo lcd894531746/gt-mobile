@@ -1,21 +1,21 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { NavigationContainer, DefaultTheme, useNavigation } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { DefaultTheme, NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { MainStackParamList, MainTabParamList, RootStackParamList } from '../types/navigation';
+import { FloatingSettingsMenu } from '../components/FloatingSettingsMenu';
 import { useAuth } from '../context/AuthContext';
-import { LoginScreen } from '../screens/LoginScreen';
-import { DataDashScreen } from '../screens/DataDashScreen';
-import { OfferScreen } from '../screens/OfferScreen';
-import { DesScreen } from '../screens/DesScreen';
 import { CusScreen } from '../screens/CusScreen';
+import { DataDashScreen } from '../screens/DataDashScreen';
+import { DesScreen } from '../screens/DesScreen';
 import { EmpScreen } from '../screens/EmpScreen';
+import { LoginScreen } from '../screens/LoginScreen';
+import { OfferScreen } from '../screens/OfferScreen';
 import { PrintTemplateEditorScreen } from '../screens/PrintTemplateEditorScreen';
 import { QuoteStatisticsScreen } from '../screens/QuoteStatisticsScreen';
-import { FloatingSettingsMenu } from '../components/FloatingSettingsMenu';
+import type { MainStackParamList, MainTabParamList, RootStackParamList } from '../types/navigation';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const MainStack = createNativeStackNavigator<MainStackParamList>();
@@ -37,20 +37,27 @@ function EmployeeStackScreen() {
 }
 
 function MainTabs() {
-  const { signOut } = useAuth();
   const insets = useSafeAreaInsets();
   const mainNavigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
 
   return (
     <View style={styles.tabShell}>
-      <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 8) }]}>
-        <Pressable onPress={() => void signOut()} style={styles.logoutPressable} hitSlop={8}>
-          <Text style={styles.logoutLabel}>退出</Text>
-        </Pressable>
-      </View>
       <Tab.Navigator
         screenOptions={({ route }) => ({
-          headerShown: false,
+          headerShown: true,
+          headerTitleAlign: 'center',
+          headerStatusBarHeight: Math.max(insets.top - 10, 0),
+          headerStyle: {
+            backgroundColor: '#f3f5f9',
+            height: 52,
+          },
+          headerTintColor: '#102248',
+          headerTitleStyle: {
+            fontSize: 18,
+            fontWeight: '700',
+          },
+          headerShadowVisible: false,
+          tabBarHideOnKeyboard: false,
           tabBarActiveTintColor: '#204dff',
           tabBarInactiveTintColor: '#64748b',
           tabBarLabelStyle: {
@@ -66,9 +73,9 @@ function MainTabs() {
             backgroundColor: '#ffffff',
             borderTopColor: '#e2e8f0',
             borderTopWidth: StyleSheet.hairlineWidth,
-            paddingTop: 4,
-            paddingBottom: Math.max(insets.bottom, 8),
-            height: 56 + Math.max(insets.bottom, 8),
+            paddingTop: 6,
+            paddingBottom: Math.max(insets.bottom, 10),
+            height: 62 + Math.max(insets.bottom, 10),
           },
           tabBarIcon: ({ color, focused }) => {
             const size = 24;
@@ -104,16 +111,20 @@ function MainTabs() {
   );
 }
 
+function PrintTemplateStackScreen() {
+  return <PrintTemplateEditorScreen embedInStackHeader />;
+}
+
 function MainFlow() {
   return (
     <MainStack.Navigator screenOptions={{ headerShown: false }}>
       <MainStack.Screen name="Tabs" component={MainTabs} />
       <MainStack.Screen
         name="PrintTemplateEditor"
-        component={PrintTemplateEditorScreen}
+        component={PrintTemplateStackScreen}
         options={{
           ...stackChildHeaderOptions,
-          title: '模板',
+          title: '打印模板',
         }}
       />
       <MainStack.Screen
@@ -129,7 +140,7 @@ function MainFlow() {
         component={CustomerStackScreen}
         options={{
           ...stackChildHeaderOptions,
-          title: '客户',
+          title: '客户管理',
         }}
       />
       <MainStack.Screen
@@ -137,7 +148,7 @@ function MainFlow() {
         component={EmployeeStackScreen}
         options={{
           ...stackChildHeaderOptions,
-          title: '员工',
+          title: '员工管理',
         }}
       />
     </MainStack.Navigator>
@@ -190,22 +201,5 @@ const styles = StyleSheet.create({
   tabShell: {
     flex: 1,
     backgroundColor: '#f3f5f9',
-  },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 4,
-    backgroundColor: '#f3f5f9',
-  },
-  logoutPressable: {
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-  },
-  logoutLabel: {
-    color: '#2f68ff',
-    fontWeight: '600',
-    fontSize: 15,
   },
 });

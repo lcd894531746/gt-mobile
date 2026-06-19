@@ -27,7 +27,7 @@ const TW = {
   priceDec: 80,
   weightDec: 80,
   calc: 92,
-  actions: 96,
+  actions: 68,
 } as const;
 
 const TABLE_MIN_WIDTH =
@@ -221,7 +221,7 @@ export function DesScreen() {
   };
 
   return (
-    <PageScaffold title="产品配置">
+    <PageScaffold title="">
       <View style={styles.toolbar}>
         <View style={styles.toolbarLead}>
           {loading ? <ActivityIndicator size="small" color="#2f68ff" /> : null}
@@ -299,11 +299,23 @@ export function DesScreen() {
                     {normalizeCalcMethod(item.calculationMethod)}
                   </Text>
                   <View style={[styles.tdOps, { width: TW.actions }]}>
-                    <Pressable style={styles.opEditBtn} onPress={() => openEdit(item)}>
-                      <Text style={styles.opEditBtnText}>修改</Text>
+                    <Pressable
+                      style={({ pressed }) => [styles.opIconBtn, pressed && styles.opIconBtnPressed]}
+                      onPress={() => openEdit(item)}
+                      accessibilityRole="button"
+                      accessibilityLabel="修改"
+                      hitSlop={8}
+                    >
+                      <Ionicons name="create-outline" size={14} color="#204dff" />
                     </Pressable>
-                    <Pressable onPress={() => confirmRemove(item)} hitSlop={6}>
-                      <Text style={styles.opDelText}>删除</Text>
+                    <Pressable
+                      style={({ pressed }) => [styles.opIconBtn, pressed && styles.opIconBtnPressed]}
+                      onPress={() => confirmRemove(item)}
+                      accessibilityRole="button"
+                      accessibilityLabel="删除"
+                      hitSlop={8}
+                    >
+                      <Ionicons name="trash-outline" size={14} color="#dc2626" />
                     </Pressable>
                   </View>
                 </View>
@@ -553,7 +565,7 @@ const styles = StyleSheet.create({
   },
   tableBodyRow: {
     flexDirection: 'row',
-    alignItems: 'stretch',
+    alignItems: 'center',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#eef2f7',
   },
@@ -589,30 +601,22 @@ const styles = StyleSheet.create({
     fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
   },
   tdOps: {
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+    flexDirection: 'row',
+    paddingHorizontal: 4,
+    paddingVertical: 4,
     borderRightWidth: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
-  opEditBtn: {
-    backgroundColor: '#2f68ff',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    minWidth: 52,
+  opIconBtn: {
+    width: 26,
+    height: 26,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  opEditBtnText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  opDelText: {
-    color: '#dc2626',
-    fontSize: 13,
-    fontWeight: '600',
+  opIconBtnPressed: {
+    opacity: 0.55,
   },
   input: {
     borderWidth: 1,

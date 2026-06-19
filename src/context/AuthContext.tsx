@@ -26,16 +26,28 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     (async () => {
-      const auth = await getStoredAuth();
-      if (auth?.token) {
-        setUser(auth);
-        setApiToken(auth.token);
-      } else {
-        await clearAuth();
+      try {
+        const auth = await getStoredAuth();
+        if (auth?.token) {
+          setUser(auth);
+          setApiToken(auth.token);
+        } else {
+          await clearAuth();
+          setUser(null);
+          setApiToken(undefined);
+        }
+      } catch (error) {
+        console.error('Failed to restore auth state', error);
+        try {
+          await clearAuth();
+        } catch (clearError) {
+          console.error('Failed to clear broken auth state', clearError);
+        }
         setUser(null);
         setApiToken(undefined);
+      } finally {
+        setIsReady(true);
       }
-      setIsReady(true);
     })();
   }, []);
 

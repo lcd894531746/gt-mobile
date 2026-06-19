@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PageScaffold } from '../components/PageScaffold';
 import { AddCustomerModal } from '../components/AddCustomerModal';
@@ -24,10 +25,9 @@ import {
   fetchQuoteDetail,
   fetchUnshippedQuotes,
   getFormulas,
-  searchCustomer,
 } from '../services/api';
 import type { CustomerRow } from '../utils/offerHelpers';
-import { getCustomerId, normalizeCustomers } from '../utils/offerHelpers';
+import { getCustomerId } from '../utils/offerHelpers';
 
 type FormulaOpt = {
   name: string;
@@ -38,6 +38,7 @@ type FormulaOpt = {
 type DraftLine = {
   key: string;
   品名: string;
+  材质: string;
   规格: string;
   单位: string;
   数量: string;
@@ -84,6 +85,7 @@ function quoteDetailToDraftLine(item: Record<string, unknown>): DraftLine {
   return {
     key: genLineKey(),
     品名: String(item['品名'] ?? ''),
+    材质: String(item['材质'] ?? item.material ?? ''),
     规格: String(item['规格'] ?? ''),
     单位: String(item['单位'] ?? '米'),
     数量: String(item['数量'] ?? ''),
@@ -121,6 +123,7 @@ function toFixedOrZero(value: string, digits: number): string {
 const COL = {
   idx: 36,
   name: 96,
+  material: 78,
   spec: 88,
   unit: 40,
   qty: 48,
@@ -134,6 +137,7 @@ const COL = {
 const TABLE_MIN =
   COL.idx +
   COL.name +
+  COL.material +
   COL.spec +
   COL.unit +
   COL.qty +
@@ -143,30 +147,21 @@ const TABLE_MIN =
   COL.p2 +
   COL.del;
 
-const CUSTOMER_SEARCH_DEBOUNCE_MS = 320;
-
-const WINDOW_H = Dimensions.get('window').height;
-
 export function OfferScreen() {
   const insets = useSafeAreaInsets();
   const [formulas, setFormulas] = useState<FormulaOpt[]>([]);
   const [formulasLoading, setFormulasLoading] = useState(false);
 
-  const [selectedCustomer, setSelectedCustomer] = useState<CustomerRow | null>(null);
+  const [customerIdText, setCustomerIdText] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [contactPerson, setContactPerson] = useState('');
-
-  const [customerQuery, setCustomerQuery] = useState('');
-  const [customerResults, setCustomerResults] = useState<CustomerRow[]>([]);
-  const [customerSearching, setCustomerSearching] = useState(false);
-  const [custComboFocused, setCustComboFocused] = useState(false);
-  const custBlurTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const [addCustomerModalVisible, setAddCustomerModalVisible] = useState(false);
 
   const [lines, setLines] = useState<DraftLine[]>([]);
   const [addProductName, setAddProductName] = useState('');
   const [addScalePrice, setAddScalePrice] = useState('');
+  const [addMaterial, setAddMaterial] = useState('');
   const [addSpec, setAddSpec] = useState('');
 
   const [formulaPickerVisible, setFormulaPickerVisible] = useState(false);
@@ -185,12 +180,6 @@ export function OfferScreen() {
   const [expandedDetailLoading, setExpandedDetailLoading] = useState(false);
   /** 从「未发货订单」编辑回填时记录单号，保存时 isEdit 传 true */
   const [editingQuoteNo, setEditingQuoteNo] = useState<string | null>(null);
-
-  const customerId = useMemo(() => getCustomerId(selectedCustomer), [selectedCustomer]);
-  const customerDisplayName = useMemo(() => {
-    if (!selectedCustomer) return '';
-    return String(selectedCustomer['客户名称'] ?? selectedCustomer.name ?? selectedCustomer.customerName ?? '');
-  }, [selectedCustomer]);
 
   const totals = useMemo(() => {
     let qtySum = 0;
@@ -225,89 +214,46 @@ export function OfferScreen() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!custComboFocused) return;
-    let cancelled = false;
-    const q = customerQuery.trim();
-    const timer = setTimeout(() => {
-      void (async () => {
-        if (!q) {
-          if (!cancelled) {
-            setCustomerResults([]);
-            setCustomerSearching(false);
-          }
-          return;
-        }
-        if (!cancelled) setCustomerSearching(true);
-        try {
-          const data = await searchCustomer(q);
-          if (!cancelled) setCustomerResults(normalizeCustomers(data));
-        } catch {
-          if (!cancelled) setCustomerResults([]);
-        } finally {
-          if (!cancelled) setCustomerSearching(false);
-        }
-      })();
-    }, CUSTOMER_SEARCH_DEBOUNCE_MS);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [customerQuery, custComboFocused]);
-
-  const clearCustBlurTimer = () => {
-    if (custBlurTimer.current) clearTimeout(custBlurTimer.current);
-    custBlurTimer.current = undefined;
-  };
-
-  const scheduleHideCustCombo = () => {
-    clearCustBlurTimer();
-    custBlurTimer.current = setTimeout(() => {
-      setCustComboFocused(false);
-      setCustomerQuery('');
-      custBlurTimer.current = undefined;
-    }, 220);
-  };
-
-  useEffect(() => {
-    return () => clearCustBlurTimer();
-  }, []);
-
-  const resetCustomerSearchUi = () => {
-    setCustomerQuery('');
-    setCustomerResults([]);
-    setCustomerSearching(false);
-    setCustComboFocused(false);
-    clearCustBlurTimer();
-  };
-
-  const applyCustomerRow = (row: CustomerRow) => {
-    setSelectedCustomer(row);
+  const fillCustomerFromRow = useCallback((row: CustomerRow) => {
+    setCustomerIdText(getCustomerId(row));
     setContactPhone(String(row['客户电话'] ?? row['联系电话'] ?? row.phone ?? row.mobile ?? ''));
     setContactPerson(String(row['客户代表'] ?? row['联系人'] ?? row.contact ?? ''));
-  };
+  }, []);
 
-  const pickCustomer = (row: CustomerRow) => {
-    applyCustomerRow(row);
-    clearCustBlurTimer();
-    setCustComboFocused(false);
-    setCustomerQuery('');
-    setCustomerResults([]);
-    setCustomerSearching(false);
-  };
-
-  const clearWorkspace = () => {
-    setSelectedCustomer(null);
+  const resetCustomerFields = useCallback(() => {
+    setCustomerIdText('');
     setContactPhone('');
     setContactPerson('');
-    resetCustomerSearchUi();
+  }, []);
+
+  const clearWorkspace = useCallback(() => {
+    resetCustomerFields();
     setLines([]);
     setAddProductName('');
     setAddScalePrice('');
+    setAddMaterial('');
     setAddSpec('');
     setEditingQuoteNo(null);
     setAddProductModalVisible(false);
-  };
+    setFormulaPickerVisible(false);
+    setUnshippedModalVisible(false);
+    setExpandedQuoteNo(null);
+    setExpandedDetailLines([]);
+    setExpandedDetailLoading(false);
+    setAddCustomerModalVisible(false);
+  }, [resetCustomerFields]);
+
+  /** 每次进入「报价」Tab 均重置为新建空白单（切换 Tab 离开再回来不保留上次编辑） */
+  const isFirstFocus = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (isFirstFocus.current) {
+        isFirstFocus.current = false;
+        return;
+      }
+      clearWorkspace();
+    }, [clearWorkspace]),
+  );
 
   const loadUnshippedList = async () => {
     setUnshippedLoading(true);
@@ -364,7 +310,7 @@ export function OfferScreen() {
         客户编号: String(quote['客户ID'] ?? ''),
         客户名称: String(quote['客户名称'] ?? ''),
       } as CustomerRow;
-      setSelectedCustomer(custRow);
+      fillCustomerFromRow(custRow);
       setContactPhone(String(quote['联系电话'] ?? ''));
       setContactPerson(String(quote['联系人'] ?? ''));
 
@@ -419,6 +365,7 @@ export function OfferScreen() {
   };
 
   const resetAddProductDraft = () => {
+    setAddMaterial('');
     setAddSpec('');
     setAddScalePrice('');
   };
@@ -434,6 +381,10 @@ export function OfferScreen() {
       Alert.alert('提示', '请填写过磅价（称重单价）');
       return false;
     }
+    if (!addMaterial.trim()) {
+      Alert.alert('提示', '请填写材质');
+      return false;
+    }
     if (!addSpec.trim()) {
       Alert.alert('提示', '请填写规格');
       return false;
@@ -443,6 +394,7 @@ export function OfferScreen() {
       {
         key: genLineKey(),
         品名: f.name,
+        材质: addMaterial.trim(),
         规格: addSpec.trim(),
         单位: f.unit || '米',
         数量: '1',
@@ -453,13 +405,14 @@ export function OfferScreen() {
         称重单价: addScalePrice.trim(),
       },
     ]);
+    setAddMaterial('');
     setAddSpec('');
     return true;
   };
 
   const handleSaveQuote = async () => {
-    if (!customerId) {
-      Alert.alert('提示', '请先搜索并选择客户');
+    if (!customerIdText.trim()) {
+      Alert.alert('提示', '请填写客户');
       return;
     }
     if (lines.length === 0) {
@@ -491,6 +444,7 @@ export function OfferScreen() {
       const unitPrice = qty > 0 ? amount / qty : 0;
       return {
         品名: line.品名.trim(),
+        材质: line.材质.trim(),
         规格: line.规格.trim(),
         单位: line.单位.trim(),
         数量: toFixedOrZero(line.数量, 2),
@@ -514,7 +468,7 @@ export function OfferScreen() {
     try {
       setSaving(true);
       const payload: Record<string, unknown> = {
-        客户ID: customerId,
+        客户ID: customerIdText.trim(),
         产品信息,
         应收金额: receivable,
         isEdit: Boolean(editingQuoteNo),
@@ -541,104 +495,47 @@ export function OfferScreen() {
   };
 
   return (
-    <PageScaffold
-      title="报价管理"
-      headerRight={
-        <Pressable
-          style={styles.unshippedHeaderBtn}
-          onPress={openUnshippedModal}
-          accessibilityRole="button"
-          accessibilityLabel="未发货订单"
-        >
-          <Ionicons name="list-outline" size={18} color="#fff" />
-          <Text style={styles.unshippedHeaderBtnText}>未发货订单</Text>
-        </Pressable>
-      }
-    >
+    <PageScaffold omitOuterScrollView>
       <ScrollView
         style={styles.pageScroll}
         contentContainerStyle={styles.pageScrollContent}
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="always"
+        keyboardDismissMode="none"
+        nestedScrollEnabled={Platform.OS === 'android'}
         removeClippedSubviews={false}
       >
         {/* 客户信息 */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>客户信息</Text>
+          <View style={styles.sectionTitleRow}>
+            <Text style={[styles.sectionTitle, styles.sectionTitleInRow]}>客户信息</Text>
+            <Pressable
+              style={styles.unshippedHeaderBtn}
+              onPress={openUnshippedModal}
+              accessibilityRole="button"
+              accessibilityLabel="未发货订单"
+            >
+              <Ionicons name="list-outline" size={15} color="#204dff" />
+              <Text style={styles.unshippedHeaderBtnText}>未发货订单</Text>
+            </Pressable>
+          </View>
           <View style={styles.customerNameRow}>
             <Text style={[styles.fieldLabel, styles.customerNameLabelInline]}>
-              <Text style={styles.required}>* </Text>客户名称
+              <Text style={styles.required}>* </Text>客户
             </Text>
             <Pressable onPress={() => setAddCustomerModalVisible(true)} hitSlop={8}>
               <Text style={styles.addCustomerBtn}>添加客户</Text>
             </Pressable>
           </View>
-          <View style={styles.custComboWrap}>
-            <View
-              style={[
-                styles.custComboInputOuter,
-                custComboFocused && styles.custComboInputOuterFocused,
-              ]}
-            >
-              <TextInput
-                style={styles.custComboInput}
-                value={custComboFocused ? customerQuery : customerDisplayName}
-                onChangeText={(t) => {
-                  setCustomerQuery(t);
-                  if (selectedCustomer && t.trim() !== customerDisplayName.trim()) {
-                    setSelectedCustomer(null);
-                    setContactPhone('');
-                    setContactPerson('');
-                  }
-                }}
-                placeholder="搜索客户"
-                placeholderTextColor="#aab4c7"
-                autoCorrect={false}
-                autoCapitalize="none"
-                onFocus={() => {
-                  clearCustBlurTimer();
-                  setCustComboFocused(true);
-                  setCustomerQuery(customerDisplayName);
-                }}
-                onBlur={() => scheduleHideCustCombo()}
-              />
-              <Ionicons name="search-outline" size={20} color="#8892a6" />
-            </View>
-            {custComboFocused ? (
-              <View style={styles.custComboDropdown}>
-                {customerSearching ? (
-                  <View style={styles.custComboDropdownLoading}>
-                    <ActivityIndicator />
-                  </View>
-                ) : customerResults.length > 0 ? (
-                  <ScrollView
-                    nestedScrollEnabled
-                    keyboardShouldPersistTaps="handled"
-                    style={styles.custComboDropdownScroll}
-                  >
-                    {customerResults.map((item, idx) => (
-                      <Pressable
-                        key={`${getCustomerId(item)}-${idx}`}
-                        style={({ pressed }) => [
-                          styles.custComboRow,
-                          pressed && styles.custComboRowPressed,
-                        ]}
-                        onPress={() => pickCustomer(item)}
-                      >
-                        <Text style={styles.custComboName} numberOfLines={2}>
-                          {String(item['客户名称'] ?? item.name ?? '-')}
-                        </Text>
-                        <Text style={styles.custComboSub}>ID {getCustomerId(item) || '—'}</Text>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-                ) : customerQuery.trim() !== '' ? (
-                  <Text style={styles.regionACHint}>暂无匹配客户</Text>
-                ) : (
-                  <Text style={styles.regionACHint}>请输入关键词，远程搜索</Text>
-                )}
-              </View>
-            ) : null}
-          </View>
+          <TextInput
+            style={styles.input}
+            value={customerIdText}
+            onChangeText={setCustomerIdText}
+            placeholder="填写客户"
+            placeholderTextColor="#aab4c7"
+            keyboardType="default"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
           <Text style={styles.fieldLabel}>联系电话</Text>
           <TextInput
             style={styles.input}
@@ -656,9 +553,6 @@ export function OfferScreen() {
             placeholder="联系人"
             placeholderTextColor="#aab4c7"
           />
-          {customerId ? (
-            <Text style={styles.customerIdHint}>客户ID：{customerId}</Text>
-          ) : null}
           {editingQuoteNo ? (
             <Text style={styles.editingQuoteHint}>正在编辑报价单：{editingQuoteNo}</Text>
           ) : null}
@@ -669,23 +563,34 @@ export function OfferScreen() {
           <View style={styles.sectionTitleRow}>
             <Text style={[styles.sectionTitle, styles.sectionTitleInRow]}>产品明细</Text>
             <Pressable
-              style={({ pressed }) => [styles.addProductHeaderBtn, pressed && styles.addProductHeaderBtnPressed]}
+              style={({ pressed }) => [
+                styles.addProductHeaderBtn,
+                pressed && styles.addProductHeaderBtnPressed,
+              ]}
               onPress={() => setAddProductModalVisible(true)}
               hitSlop={10}
               accessibilityRole="button"
               accessibilityLabel="添加产品"
             >
+              <Ionicons name="add-circle-outline" size={15} color="#204dff" />
               <Text style={styles.addProductHeaderBtnText}>添加产品</Text>
             </Pressable>
           </View>
           {lines.length === 0 ? (
             <Text style={styles.emptyHint}>暂无明细，请点击「添加产品」，在弹窗中填写后加入一行</Text>
           ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator nestedScrollEnabled>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="always"
+              keyboardDismissMode="none"
+            >
               <View style={{ minWidth: TABLE_MIN }}>
                 <View style={styles.tableHead}>
                   <Text style={[styles.th, { width: COL.idx }]}>序号</Text>
                   <Text style={[styles.th, { width: COL.name }]}>品名</Text>
+                  <Text style={[styles.th, { width: COL.material }]}>材质</Text>
                   <Text style={[styles.th, { width: COL.spec }]}>规格</Text>
                   <Text style={[styles.th, { width: COL.unit }]}>单位</Text>
                   <Text style={[styles.th, { width: COL.qty }]}>数量</Text>
@@ -701,45 +606,73 @@ export function OfferScreen() {
                     <Text style={[styles.td, { width: COL.name }]} numberOfLines={2}>
                       {line.品名}
                     </Text>
+                    <Text style={[styles.td, { width: COL.material }]} numberOfLines={2}>
+                      {line.材质 || '-'}
+                    </Text>
                     <Text style={[styles.td, { width: COL.spec }]} numberOfLines={2}>
                       {line.规格}
                     </Text>
                     <Text style={[styles.td, styles.tdCenter, { width: COL.unit }]}>{line.单位}</Text>
-                    <TextInput
-                      style={[styles.tdInput, { width: COL.qty }]}
-                      value={line.数量}
-                      onChangeText={(t) => updateLine(line.key, { 数量: t })}
-                      underlineColorAndroid="transparent"
-                      keyboardType="decimal-pad"
-                    />
-                    <TextInput
-                      style={[styles.tdInput, { width: COL.w1 }]}
-                      value={line.槽重}
-                      onChangeText={(t) => updateLine(line.key, { 槽重: t })}
-                      underlineColorAndroid="transparent"
-                      keyboardType="decimal-pad"
-                    />
-                    <TextInput
-                      style={[styles.tdInput, { width: COL.p1 }]}
-                      value={line.槽价}
-                      onChangeText={(t) => updateLine(line.key, { 槽价: t })}
-                      underlineColorAndroid="transparent"
-                      keyboardType="decimal-pad"
-                    />
-                    <TextInput
-                      style={[styles.tdInput, { width: COL.w2 }]}
-                      value={line.盖重}
-                      onChangeText={(t) => updateLine(line.key, { 盖重: t })}
-                      underlineColorAndroid="transparent"
-                      keyboardType="decimal-pad"
-                    />
-                    <TextInput
-                      style={[styles.tdInput, { width: COL.p2 }]}
-                      value={line.盖价}
-                      onChangeText={(t) => updateLine(line.key, { 盖价: t })}
-                      underlineColorAndroid="transparent"
-                      keyboardType="decimal-pad"
-                    />
+                    <View style={[styles.tdInputCell, { width: COL.qty }]}>
+                      <TextInput
+                        style={styles.tdInput}
+                        value={line.数量}
+                        onChangeText={(t) => updateLine(line.key, { 数量: t })}
+                        underlineColorAndroid="transparent"
+                        keyboardType="decimal-pad"
+                        placeholder="0"
+                        placeholderTextColor="#8b95aa"
+                        selectionColor="#204dff"
+                      />
+                    </View>
+                    <View style={[styles.tdInputCell, { width: COL.w1 }]}>
+                      <TextInput
+                        style={styles.tdInput}
+                        value={line.槽重}
+                        onChangeText={(t) => updateLine(line.key, { 槽重: t })}
+                        underlineColorAndroid="transparent"
+                        keyboardType="decimal-pad"
+                        placeholder="0"
+                        placeholderTextColor="#8b95aa"
+                        selectionColor="#204dff"
+                      />
+                    </View>
+                    <View style={[styles.tdInputCell, { width: COL.p1 }]}>
+                      <TextInput
+                        style={styles.tdInput}
+                        value={line.槽价}
+                        onChangeText={(t) => updateLine(line.key, { 槽价: t })}
+                        underlineColorAndroid="transparent"
+                        keyboardType="decimal-pad"
+                        placeholder="0"
+                        placeholderTextColor="#8b95aa"
+                        selectionColor="#204dff"
+                      />
+                    </View>
+                    <View style={[styles.tdInputCell, { width: COL.w2 }]}>
+                      <TextInput
+                        style={styles.tdInput}
+                        value={line.盖重}
+                        onChangeText={(t) => updateLine(line.key, { 盖重: t })}
+                        underlineColorAndroid="transparent"
+                        keyboardType="decimal-pad"
+                        placeholder="0"
+                        placeholderTextColor="#8b95aa"
+                        selectionColor="#204dff"
+                      />
+                    </View>
+                    <View style={[styles.tdInputCell, { width: COL.p2 }]}>
+                      <TextInput
+                        style={styles.tdInput}
+                        value={line.盖价}
+                        onChangeText={(t) => updateLine(line.key, { 盖价: t })}
+                        underlineColorAndroid="transparent"
+                        keyboardType="decimal-pad"
+                        placeholder="0"
+                        placeholderTextColor="#8b95aa"
+                        selectionColor="#204dff"
+                      />
+                    </View>
                     <Pressable style={[styles.delCell, { width: COL.del }]} onPress={() => removeLine(line.key)}>
                       <Text style={styles.delText}>删</Text>
                     </Pressable>
@@ -754,7 +687,11 @@ export function OfferScreen() {
           </View>
           <Text style={styles.totalHint}>金额按「数量 × (槽价 + 盖价)」汇总；保存时写入单价/金额/重量字段。</Text>
           <Pressable
-            style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
+            style={({ pressed }) => [
+              styles.saveBtn,
+              saving && styles.saveBtnDisabled,
+              pressed && !saving && styles.saveBtnPressed,
+            ]}
             onPress={() => void handleSaveQuote()}
             disabled={saving}
           >
@@ -769,8 +706,8 @@ export function OfferScreen() {
         onRequestClose={() => setAddCustomerModalVisible(false)}
         onSaved={({ row, nameSaved }) => {
           const picked = Boolean(row);
-          if (row) pickCustomer(row);
-          Alert.alert('成功', picked ? '客户已添加，并已填入当前报价' : '客户已添加，请在「客户名称」处搜索选择');
+          if (row) fillCustomerFromRow(row);
+          Alert.alert('成功', picked ? '客户已添加，并已填入当前报价' : '客户已添加，请在报价页填写客户');
         }}
       />
 
@@ -811,26 +748,33 @@ export function OfferScreen() {
                 const timeStr = timeRaw != null && timeRaw !== '' ? formatQuoteTime(timeRaw) : '—';
                 return (
                   <View style={styles.unshippedCard}>
-                    <View style={styles.unshippedCardHead}>
+                    <View style={styles.unshippedCardRow}>
                       <Text style={styles.unshippedIdx}>{index + 1}</Text>
-                      <View style={styles.unshippedCardMain}>
-                        <Text style={styles.unshippedMono}>单号 {orderNo || '—'}</Text>
-                        <Text style={styles.unshippedCustomer}>{String(item['客户名称'] ?? '—')}</Text>
-                        <Text style={styles.unshippedSub}>
-                          {amt} · {timeStr}
-                        </Text>
+                      <View style={styles.unshippedCardBody}>
+                        <View style={styles.unshippedTitleRow}>
+                          <Text style={styles.unshippedCustomerName} numberOfLines={2}>
+                            {String(item['客户名称'] ?? '—')}
+                          </Text>
+                          <Text style={styles.unshippedOrderNoRight} numberOfLines={2}>
+                            {orderNo || '—'}
+                          </Text>
+                        </View>
+                        <View style={styles.unshippedMetaBelow}>
+                          <Text style={styles.unshippedAmtText}>{amt}</Text>
+                          <Text style={styles.unshippedTimeText}>{timeStr}</Text>
+                        </View>
+                        <View style={styles.unshippedActions}>
+                          <Pressable style={styles.unshippedLinkBtn} onPress={() => void handleEditQuoteFromUnshipped(item)}>
+                            <Text style={styles.unshippedLinkText}>编辑</Text>
+                          </Pressable>
+                          <Pressable style={styles.unshippedLinkBtn} onPress={() => toggleExpandQuote(orderNo)}>
+                            <Text style={styles.unshippedLinkText}>{expanded ? '收起' : '展开'}</Text>
+                          </Pressable>
+                          <Pressable style={styles.unshippedDangerBtn} onPress={() => handleDeleteQuoteFromUnshipped(item)}>
+                            <Text style={styles.unshippedDangerText}>删除</Text>
+                          </Pressable>
+                        </View>
                       </View>
-                    </View>
-                    <View style={styles.unshippedActions}>
-                      <Pressable style={styles.unshippedLinkBtn} onPress={() => void handleEditQuoteFromUnshipped(item)}>
-                        <Text style={styles.unshippedLinkText}>编辑</Text>
-                      </Pressable>
-                      <Pressable style={styles.unshippedLinkBtn} onPress={() => toggleExpandQuote(orderNo)}>
-                        <Text style={styles.unshippedLinkText}>{expanded ? '收起' : '展开'}</Text>
-                      </Pressable>
-                      <Pressable style={styles.unshippedDangerBtn} onPress={() => handleDeleteQuoteFromUnshipped(item)}>
-                        <Text style={styles.unshippedDangerText}>删除</Text>
-                      </Pressable>
                     </View>
                     {expanded ? (
                       <View style={styles.unshippedExpanded}>
@@ -842,7 +786,11 @@ export function OfferScreen() {
                           expandedDetailLines.map((row, ri) => (
                             <View key={`d-${orderNo}-${ri}`} style={styles.detailLineRow}>
                               <Text style={styles.detailLineMain} numberOfLines={2}>
-                                {String(row['品名'] ?? '')} · {String(row['规格'] ?? '')}
+                                {[
+                                  String(row['品名'] ?? ''),
+                                  String(row['材质'] ?? row.material ?? ''),
+                                  String(row['规格'] ?? ''),
+                                ].filter((part) => part.trim() !== '').join(' · ')}
                               </Text>
                               <Text style={styles.detailLineSub}>
                                 数量 {formatQuoteCellNum(row['数量'], 2)} · 单价 {formatQuoteCellNum(row['单价'], 2)} · 金额{' '}
@@ -883,7 +831,7 @@ export function OfferScreen() {
               style={[
                 styles.addProductModalSheet,
                 {
-                  maxHeight: WINDOW_H * 0.92,
+                  maxHeight: Dimensions.get('window').height * 0.92,
                   paddingBottom: Math.max(insets.bottom, 14) + 16,
                 },
               ]}
@@ -895,7 +843,8 @@ export function OfferScreen() {
               </Pressable>
             </View>
             <ScrollView
-              keyboardShouldPersistTaps="handled"
+              keyboardShouldPersistTaps="always"
+              keyboardDismissMode="none"
               showsVerticalScrollIndicator={false}
               bounces={false}
               contentContainerStyle={styles.addProductModalScrollContent}
@@ -920,6 +869,16 @@ export function OfferScreen() {
                 value={addScalePrice}
                 onChangeText={setAddScalePrice}
                 placeholder="如 6.50/6.40/6.30"
+                placeholderTextColor="#aab4c7"
+              />
+              <Text style={styles.fieldLabel}>
+                <Text style={styles.required}>* </Text>材质
+              </Text>
+              <TextInput
+                style={styles.input}
+                value={addMaterial}
+                onChangeText={setAddMaterial}
+                placeholder="材质"
                 placeholderTextColor="#aab4c7"
               />
               <Text style={styles.fieldLabel}>
@@ -969,7 +928,7 @@ export function OfferScreen() {
             <Text style={styles.modalTitle}>选择产品</Text>
             <FlatList
               data={formulas}
-              keyExtractor={(item) => item.name}
+              keyExtractor={(item, index) => `${item.name}-${item.unit}-${item.parameters}-${index}`}
               style={styles.formulaList}
               renderItem={({ item }) => (
                 <Pressable
@@ -1009,16 +968,18 @@ const styles = StyleSheet.create({
   unshippedHeaderBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#2f68ff',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: 'rgba(32, 77, 255, 0.08)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(32, 77, 255, 0.28)',
   },
   unshippedHeaderBtnText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 13,
+    color: '#204dff',
+    fontWeight: '600',
+    fontSize: 12,
   },
   card: {
     backgroundColor: '#fff',
@@ -1045,18 +1006,24 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   addProductHeaderBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#2f68ff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: 'rgba(32, 77, 255, 0.08)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(32, 77, 255, 0.28)',
   },
   addProductHeaderBtnPressed: {
-    opacity: 0.85,
+    opacity: 0.88,
+    backgroundColor: 'rgba(32, 77, 255, 0.14)',
   },
   addProductHeaderBtnText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 14,
+    color: '#204dff',
+    fontWeight: '600',
+    fontSize: 12,
   },
   fieldLabel: {
     fontSize: 13,
@@ -1131,84 +1098,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#aab4c7',
   },
-  custComboWrap: {
-    position: 'relative',
-    zIndex: 55,
-    overflow: 'visible',
-    marginBottom: 8,
-  },
-  custComboInputOuter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: StyleSheet.hairlineWidth * 2,
-    borderColor: '#d8e2ef',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    backgroundColor: '#fafbfd',
-    minHeight: 44,
-    gap: 8,
-  },
-  custComboInputOuterFocused: {
-    borderColor: '#2f68ff',
-    backgroundColor: '#fff',
-  },
-  custComboInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#102248',
-    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
-  },
-  custComboDropdown: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: '100%',
-    marginTop: 4,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#fff',
-    zIndex: 100,
-    ...(Platform.OS === 'ios'
-      ? {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.14,
-          shadowRadius: 10,
-        }
-      : { elevation: 10 }),
-  },
-  custComboDropdownScroll: {
-    maxHeight: 260,
-  },
-  custComboDropdownLoading: {
-    paddingVertical: 20,
-    alignItems: 'center',
-  },
-  custComboRow: {
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#eef2f7',
-  },
-  custComboRowPressed: {
-    backgroundColor: '#f1f5f9',
-  },
-  custComboName: {
-    fontWeight: '700',
-    fontSize: 15,
-    color: '#102248',
-  },
-  custComboSub: {
-    marginTop: 4,
-    fontSize: 12,
-    color: '#8892a6',
-  },
-  customerIdHint: {
-    marginTop: 6,
-    fontSize: 12,
-    color: '#8892a6',
-  },
   editingQuoteHint: {
     marginTop: 8,
     fontSize: 13,
@@ -1250,7 +1139,7 @@ const styles = StyleSheet.create({
   },
   unshippedListContent: {
     paddingBottom: 24,
-    gap: 10,
+    gap: 8,
   },
   unshippedEmpty: {
     textAlign: 'center',
@@ -1260,46 +1149,75 @@ const styles = StyleSheet.create({
   unshippedCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#e8ecf4',
   },
-  unshippedCardHead: {
+  /** 左侧序号 + 右侧整块（名称/单号/金额时间/操作），金额与名称左缘对齐 */
+  unshippedCardRow: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 10,
+  },
+  unshippedCardBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  unshippedTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
   },
   unshippedIdx: {
     fontSize: 13,
     fontWeight: '700',
     color: '#64748b',
     minWidth: 22,
+    paddingTop: 2,
   },
-  unshippedCardMain: {
+  unshippedCustomerName: {
     flex: 1,
-    gap: 4,
-  },
-  unshippedMono: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  unshippedCustomer: {
+    minWidth: 0,
     fontSize: 15,
     fontWeight: '700',
     color: '#102248',
   },
-  unshippedSub: {
+  unshippedOrderNoRight: {
+    flexShrink: 0,
+    maxWidth: '42%',
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+    textAlign: 'right',
+  },
+  unshippedMetaBelow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 2,
+    gap: 10,
+  },
+  unshippedAmtText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a',
+    flexShrink: 0,
+  },
+  unshippedTimeText: {
     fontSize: 12,
     color: '#64748b',
+    flex: 1,
+    textAlign: 'right',
   },
   unshippedActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#eef2f7',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 14,
+    marginTop: 4,
   },
   unshippedLinkBtn: {
     paddingVertical: 4,
@@ -1318,11 +1236,11 @@ const styles = StyleSheet.create({
     color: '#dc2626',
   },
   unshippedExpanded: {
-    marginTop: 10,
-    paddingTop: 10,
+    marginTop: 8,
+    paddingTop: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#eef2f7',
-    gap: 10,
+    gap: 8,
   },
   detailLineRow: {
     paddingVertical: 6,
@@ -1380,17 +1298,28 @@ const styles = StyleSheet.create({
   tdCenter: {
     textAlign: 'center',
   },
-  tdInput: {
-    paddingVertical: 4,
+  tdInputCell: {
     paddingHorizontal: 4,
-    fontSize: 11,
+    paddingVertical: 4,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: TABLE_BORDER_CELL,
+    justifyContent: 'center',
+  },
+  tdInput: {
+    width: '100%',
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+    fontSize: 12,
+    fontWeight: '600',
     color: '#102248',
     /** 勿用纯白底，否则会与斑马纹行 / 深色主题下的表格脱节，出现「一块白板」 */
-    backgroundColor: 'transparent',
-    margin: 0,
-    minHeight: 32,
+    backgroundColor: '#f8fbff',
+    minHeight: 36,
+    textAlign: 'center',
     /** 去掉输入格外框，避免出现半截「白线」（尤其 Android / Web 默认样式） */
-    borderWidth: 0,
+    borderWidth: 1,
+    borderColor: 'rgba(32, 77, 255, 0.28)',
+    borderRadius: 8,
     ...Platform.select({
       web: {
         outlineWidth: 0,
@@ -1425,19 +1354,41 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   saveBtn: {
-    height: 44,
+    minHeight: 40,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     borderRadius: 10,
-    backgroundColor: '#2f68ff',
+    backgroundColor: '#204dff',
     justifyContent: 'center',
     alignItems: 'center',
+    alignSelf: 'stretch',
+    ...(Platform.OS === 'ios'
+      ? {
+          shadowColor: '#204dff',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.2,
+          shadowRadius: 5,
+        }
+      : { elevation: 2 }),
+  },
+  saveBtnPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.99 }],
   },
   saveBtnDisabled: {
-    opacity: 0.65,
+    opacity: 0.55,
+    ...(Platform.OS === 'ios'
+      ? {
+          shadowOpacity: 0,
+          shadowRadius: 0,
+        }
+      : { elevation: 0 }),
   },
   saveBtnText: {
     color: '#fff',
-    fontWeight: '700',
-    fontSize: 16,
+    fontWeight: '600',
+    fontSize: 14,
+    letterSpacing: 0.2,
   },
   addProductModalOuter: {
     flex: 1,

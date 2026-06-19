@@ -55,8 +55,43 @@ export async function loginByApi(username: string, plainPassword: string): Promi
   };
 }
 
-export async function fetchEmployees() {
-  const { data } = await api.get('/emp');
+/** 员工列表；与桌面端一致：`GET /emp?query=` */
+export async function fetchEmployees(query = '') {
+  const { data } = await api.get('/emp', { params: { query } });
+  return data;
+}
+
+/** 桌面端：`POST /emp`，`员工密码` 为 MD5 摘要 */
+export async function addEmployee(payload: {
+  员工姓名: string;
+  账号: string;
+  员工密码: string;
+  员工电话: string;
+  职位: string;
+}) {
+  const { data } = await api.post('/emp', payload);
+  return data;
+}
+
+/** 桌面端：`PUT /emp/:id` */
+export async function updateEmployee(
+  id: string | number,
+  payload: {
+    员工姓名: string;
+    账号: string;
+    员工电话: string;
+    职位: string;
+  },
+) {
+  const { data } = await api.put(`/emp/${encodeURIComponent(String(id))}`, payload);
+  return data;
+}
+
+/** 桌面端：`PUT /emp/:id/password`，body `{ 新密码: md5 }` */
+export async function updateEmployeePassword(id: string | number, newPasswordMd5: string) {
+  const { data } = await api.put(`/emp/${encodeURIComponent(String(id))}/password`, {
+    新密码: newPasswordMd5,
+  });
   return data;
 }
 
@@ -124,6 +159,12 @@ export async function updateCustomer(id: string | number, payload: Record<string
   return data;
 }
 
+/** 与 updateCustomer 路径风格一致；若后端路由不同请改此处 */
+export async function deleteCustomer(id: string | number) {
+  const { data } = await api.delete(`/deleteCustomer/${encodeURIComponent(String(id))}`);
+  return data;
+}
+
 export async function getFormulas() {
   const { data } = await api.get('/getFormulas');
   return data;
@@ -142,6 +183,37 @@ export async function updateFormula(payload: Record<string, unknown>) {
 export async function deleteFormula(name: string) {
   const { data } = await api.delete(`/deleteFormula/${encodeURIComponent(name)}`);
   return data;
+}
+
+/** Electron 桌面端走本地目录；若服务端仍提供旧接口则可拉取列表（失败返回 null） */
+export async function fetchRemotePrintTemplateNames(): Promise<string[] | null> {
+  try {
+    const { data } = await api.get<unknown>('/getPrintTemplateFiles');
+    if (Array.isArray(data)) return data.map((x) => String(x));
+    if (data && typeof data === 'object' && Array.isArray((data as { data?: unknown }).data)) {
+      return (data as { data: unknown[] }).data.map((x) => String(x));
+    }
+    return [];
+  } catch {
+    return null;
+  }
+}
+
+/** 尝试路径参数或查询参数，兼容不同后端写法 */
+export async function fetchRemoteTemplateConfig(templateName: string): Promise<unknown | null> {
+  try {
+    const { data } = await api.get(`/getTemplateConfig/${encodeURIComponent(templateName)}`);
+    return data;
+  } catch {
+    try {
+      const { data } = await api.get('/getTemplateConfig', {
+        params: { name: templateName, templateName },
+      });
+      return data;
+    } catch {
+      return null;
+    }
+  }
 }
 
 export { api };
