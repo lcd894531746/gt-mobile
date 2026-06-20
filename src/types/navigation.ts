@@ -10,6 +10,9 @@ export type MainStackParamList = {
   QuoteStatistics: undefined;
   Customer: undefined;
   Employee: undefined;
+  QuoteDetailFullscreen: {
+    list: Record<string, unknown>[];
+  };
 };
 
 export type MainTabParamList = {

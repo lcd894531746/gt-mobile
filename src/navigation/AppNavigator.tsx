@@ -14,6 +14,7 @@ import { EmpScreen } from '../screens/EmpScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { OfferScreen } from '../screens/OfferScreen';
 import { PrintTemplateEditorScreen } from '../screens/PrintTemplateEditorScreen';
+import { QuoteDetailFullscreenScreen } from '../screens/QuoteDetailFullscreenScreen';
 import { QuoteStatisticsScreen } from '../screens/QuoteStatisticsScreen';
 import type { MainStackParamList, MainTabParamList, RootStackParamList } from '../types/navigation';
 
@@ -149,6 +150,15 @@ function MainFlow() {
         options={{
           ...stackChildHeaderOptions,
           title: '员工管理',
+        }}
+      />
+      <MainStack.Screen
+        name="QuoteDetailFullscreen"
+        component={QuoteDetailFullscreenScreen}
+        options={{
+          headerShown: false,
+          presentation: 'fullScreenModal',
+          orientation: 'landscape',
         }}
       />
     </MainStack.Navigator>

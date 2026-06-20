@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import * as ScreenOrientation from 'expo-screen-orientation';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -16,9 +17,9 @@ import {
   View,
 } from 'react-native';
 import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PageScaffold } from '../components/PageScaffold';
 import { fetchQuoteData, fetchQuoteDetail } from '../services/api';
+import type { MainStackParamList } from '../types/navigation';
 import { getQuoteOrderNo, mergeQuotesByOrderNo, numberFromRecord } from '../utils/mergeQuotesByOrderNo';
 
 type QuoteRecord = Record<string, unknown>;
@@ -1011,13 +1012,11 @@ export function DataDashScreen() {
   const [productAnalysisDone, setProductAnalysisDone] = useState(false);
   const [productAggMap, setProductAggMap] = useState<Record<string, { amount: number; qty: number }>>({});
 
-  const [quoteDetailFullscreen, setQuoteDetailFullscreen] = useState(false);
-
   const [customerTrendUnit, setCustomerTrendUnit] = useState<'month' | 'quarter'>('month');
   const [customerRankGranularity, setCustomerRankGranularity] = useState<'day' | 'month' | 'year'>('day');
 
-  const insets = useSafeAreaInsets();
-  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const { width: windowWidth } = useWindowDimensions();
+  const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
 
   const loadMain = useCallback(async () => {
     setLoading(true);
@@ -1181,34 +1180,9 @@ export function DataDashScreen() {
     setOrderDetailModalLoading(false);
   };
 
-  const openQuoteFullscreen = useCallback(async () => {
-    setQuoteDetailFullscreen(true);
-    if (Platform.OS !== 'web') {
-      try {
-        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
-      } catch {
-        /* 设备或模拟器可能不支持 */
-      }
-    }
-  }, []);
-
-  const closeQuoteFullscreen = useCallback(async () => {
-    setQuoteDetailFullscreen(false);
-    if (Platform.OS !== 'web') {
-      try {
-        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
-      } catch {
-        /* ignore */
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (Platform.OS === 'web') return;
-      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
-    };
-  }, []);
+  const openQuoteFullscreen = useCallback(() => {
+    navigation.navigate('QuoteDetailFullscreen', { list });
+  }, [list, navigation]);
 
   const renderQuoteDetailTable = (cols: QuoteTableCols, minWidth: number) => (
     <View style={{ minWidth }}>
@@ -1322,9 +1296,6 @@ export function DataDashScreen() {
   }, [productAggMap]);
 
   const rankColors = ['#f5222d', '#fa8c16', '#2f54eb'];
-
-  const quoteFullscreenMinW = quoteTableMinWidth(QUOTE_TABLE_COLS_FULLSCREEN, windowWidth);
-  const quoteFullscreenBodyH = Math.max(280, windowHeight - insets.top - 56 - insets.bottom);
 
   return (
     <PageScaffold>
@@ -1634,44 +1605,6 @@ export function DataDashScreen() {
           )}
         </>
       ) : null}
-
-      <Modal
-        visible={quoteDetailFullscreen}
-        animationType="fade"
-        presentationStyle="fullScreen"
-        statusBarTranslucent={Platform.OS === 'android'}
-        onRequestClose={() => void closeQuoteFullscreen()}
-      >
-        <View style={styles.quoteFullscreenRoot}>
-          <View style={[styles.quoteFullscreenToolbar, { paddingTop: insets.top }]}>
-            <Text style={styles.quoteFullscreenTitle}>报价明细</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="退出全屏"
-              hitSlop={12}
-              onPress={() => void closeQuoteFullscreen()}
-              style={styles.quoteFullscreenCloseBtn}
-            >
-              <Ionicons name="contract-outline" size={26} color="#102248" />
-            </Pressable>
-          </View>
-          <ScrollView
-            horizontal
-            nestedScrollEnabled
-            showsHorizontalScrollIndicator
-            style={styles.quoteFullscreenHScroll}
-          >
-            <ScrollView
-              nestedScrollEnabled
-              showsVerticalScrollIndicator
-              style={{ width: quoteFullscreenMinW, height: quoteFullscreenBodyH }}
-              contentContainerStyle={styles.quoteFullscreenVScrollContent}
-            >
-              {renderQuoteDetailTable(QUOTE_TABLE_COLS_FULLSCREEN, quoteFullscreenMinW)}
-            </ScrollView>
-          </ScrollView>
-        </View>
-      </Modal>
 
       <Modal
         visible={orderDetailModalOrderNo !== null}

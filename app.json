@@ -13,11 +13,16 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "buildNumber": "1",
+      "bundleIdentifier": "com.gtwin.gtmobile",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.gtwin.gtmobile",
-      "usesCleartextTraffic": true,
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -29,11 +34,6 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "extra": {
-      "eas": {
-        "projectId": "c3ec058d-c027-4000-8896-cdf9c2911a83"
-      }
-    },
     "plugins": [
       [
         "expo-build-properties",
@@ -43,8 +43,13 @@
           }
         }
       ],
-      "expo-font",
-      "expo-sharing"
-    ]
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "f8f91d8e-55b8-4574-8d2f-924ec112e60e"
+      }
+    },
+    "owner": "xiaoadong"
   }
 }
