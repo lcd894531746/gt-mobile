@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GT Win Support</title>
+    <style>
+      :root {
+        --bg: #f3f7ff;
+        --card: #ffffff;
+        --text: #14213d;
+        --muted: #5b6785;
+        --line: #d9e2f2;
+        --brand: #2f63f6;
+        --brand-soft: #e8efff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Arial, sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top right, #d9e4ff 0, #d9e4ff 16rem, transparent 16rem),
+          linear-gradient(180deg, #eef4ff 0%, #f7f9fd 100%);
+      }
+
+      .wrap {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 40px 20px 72px;
+      }
+
+      .hero {
+        background: rgba(255, 255, 255, 0.88);
+        border: 1px solid rgba(217, 226, 242, 0.9);
+        border-radius: 28px;
+        padding: 32px;
+        box-shadow: 0 20px 50px rgba(41, 72, 152, 0.08);
+      }
+
+      .badge {
+        display: inline-block;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: var(--brand-soft);
+        color: var(--brand);
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      h1 {
+        margin: 18px 0 10px;
+        font-size: clamp(32px, 6vw, 52px);
+        line-height: 1.08;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 17px;
+        line-height: 1.75;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 18px;
+        margin-top: 26px;
+      }
+
+      .card {
+        display: block;
+        text-decoration: none;
+        background: var(--card);
+        color: inherit;
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        padding: 24px;
+        transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+      }
+
+      .card:hover {
+        transform: translateY(-2px);
+        border-color: #bdd0ff;
+        box-shadow: 0 18px 36px rgba(47, 99, 246, 0.12);
+      }
+
+      .card h2 {
+        margin: 0 0 10px;
+        font-size: 22px;
+      }
+
+      .card p {
+        font-size: 15px;
+      }
+
+      .meta {
+        margin-top: 34px;
+        padding: 24px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid var(--line);
+      }
+
+      .meta strong {
+        display: block;
+        margin-bottom: 10px;
+        font-size: 18px;
+      }
+
+      .meta ul {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--muted);
+        line-height: 1.9;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <section class="hero">
+        <span class="badge">GT Win</span>
+        <h1>Support and Privacy Pages</h1>
+        <p>
+          This page is a simple entry for GT Win support information and privacy policy.
+          It can be used directly for the App Store Connect Support URL and Privacy Policy URL.
+        </p>
+
+        <div class="grid">
+          <a class="card" href="./support.html">
+            <h2>Support</h2>
+            <p>Contact details, support scope, feedback guidance, and service hours.</p>
+          </a>
+          <a class="card" href="./privacy.html">
+            <h2>Privacy Policy</h2>
+            <p>How GT Win handles account data, customer data, quote data, and local storage.</p>
+          </a>
+        </div>
+      </section>
+
+      <section class="meta">
+        <strong>Suggested URLs</strong>
+        <ul>
+          <li>Support URL: point to <code>support.html</code> after deployment</li>
+          <li>Privacy Policy URL: point to <code>privacy.html</code> after deployment</li>
+          <li>If you use GitHub Pages, the link may look like <code>https://username.github.io/repo/support.html</code></li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>
