@@ -18,7 +18,8 @@
       "bundleIdentifier": "com.gtwin.gtmobile",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "icon": "./assets/icon.png"
     },
     "android": {
       "package": "com.gtwin.gtmobile",
