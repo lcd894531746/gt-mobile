@@ -28,7 +28,7 @@ export async function clearAuth(): Promise<void> {
 }
 
 export async function getSavedUsername(): Promise<string> {
-  return (await AsyncStorage.getItem(KEYS.savedUsername)) ?? '纪勇';
+  return (await AsyncStorage.getItem(KEYS.savedUsername)) ?? '';
 }
 
 export async function getStoredAuth(): Promise<AuthUser | null> {
@@ -50,3 +50,4 @@ export async function getStoredAuth(): Promise<AuthUser | null> {
     return null;
   }
 }
+
