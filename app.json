@@ -17,7 +17,10 @@
       "buildNumber": "1",
       "bundleIdentifier": "com.gtwin.gtmobile",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
       },
       "icon": "./assets/icon.png"
     },

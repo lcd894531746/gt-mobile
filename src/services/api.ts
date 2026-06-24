@@ -45,14 +45,36 @@ export async function loginByApi(username: string, plainPassword: string): Promi
     username,
     password: md5(plainPassword),
   };
-  const { data } = await api.post<LoginResponse>('/login', payload);
-  return {
-    ...data,
-    token: data?.token ?? data?.data?.token,
-    user: data?.user ?? data?.data,
-    success: Boolean(data?.success),
-    message: data?.message,
-  };
+  try {
+    const { data } = await api.post<LoginResponse>('/login', payload);
+    return {
+      ...data,
+      token: data?.token ?? data?.data?.token,
+      user: data?.user ?? data?.data,
+      success: Boolean(data?.success),
+      message: data?.message,
+    };
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      if (error.response) {
+        const serverMessage =
+          typeof error.response.data === 'object' && error.response.data && 'message' in error.response.data
+            ? String((error.response.data as { message?: unknown }).message ?? '')
+            : '';
+        throw new Error(serverMessage || `登录请求失败（HTTP ${error.response.status}）`);
+      }
+
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('登录超时，请检查服务器状态或网络连接');
+      }
+
+      if (error.request) {
+        throw new Error(`无法连接服务器：${API_BASE_URL}`);
+      }
+    }
+
+    throw error;
+  }
 }
 
 /** 员工列表；与桌面端一致：`GET /emp?query=` */
