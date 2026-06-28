@@ -1,1 +1,1 @@
-export const API_BASE_URL = 'http://150.158.143.107:3001';
+export const API_BASE_URL = 'https://shanlan.xyz/gtwin-api';
