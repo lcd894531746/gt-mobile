@@ -2,15 +2,33 @@ import axios from 'axios';
 import md5 from 'md5';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config/env';
+import { clearAuth } from './storage';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
 });
 
+type UnauthorizedHandler = () => void | Promise<void>;
+
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+let authExpiredHandled = false;
+
+export class AuthExpiredError extends Error {
+  constructor(message = '登录已过期，请重新登录') {
+    super(message);
+    this.name = 'AuthExpiredError';
+  }
+}
+
+export function registerUnauthorizedHandler(handler?: UnauthorizedHandler) {
+  unauthorizedHandler = handler ?? null;
+}
+
 export function setApiToken(token?: string) {
   if (token) {
     api.defaults.headers.common.Authorization = `Bearer ${token}`;
+    authExpiredHandled = false;
   } else {
     delete api.defaults.headers.common.Authorization;
   }
@@ -26,6 +44,39 @@ api.interceptors.request.use(async (config) => {
   }
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (!axios.isAxiosError(error) || !error.response) {
+      return Promise.reject(error);
+    }
+
+    const { status } = error.response;
+    const requestUrl = error.config?.url ?? '';
+    const isLoginRequest = requestUrl.includes('/login');
+
+    if ((status === 401 || status === 403) && !isLoginRequest) {
+      if (!authExpiredHandled) {
+        authExpiredHandled = true;
+        setApiToken(undefined);
+        try {
+          if (unauthorizedHandler) {
+            await unauthorizedHandler();
+          } else {
+            await clearAuth();
+          }
+        } catch (handlerError) {
+          console.error('Failed to handle unauthorized response', handlerError);
+        }
+      }
+
+      return Promise.reject(new AuthExpiredError());
+    }
+
+    return Promise.reject(error);
+  },
+);
 
 export interface LoginResponse {
   success?: boolean;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,12 +13,26 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
+import { getSavedUsername } from '../services/storage';
 
 export function LoginScreen() {
   const { signIn } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const savedUsername = await getSavedUsername();
+        if (savedUsername) {
+          setUsername(savedUsername);
+        }
+      } catch (error) {
+        console.error('Failed to restore saved username', error);
+      }
+    })();
+  }, []);
 
   const handleLogin = async () => {
     if (!username.trim() || !password) {
