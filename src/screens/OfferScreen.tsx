@@ -852,7 +852,7 @@ export function OfferScreen() {
               <Text style={styles.fieldLabel}>
                 <Text style={styles.required}>* </Text>选择产品
               </Text>
-              <Pressable style={styles.customerPickBtn} onPress={() => setFormulaPickerVisible(true)}>
+              <Pressable style={styles.customerPickBtn} onPress={() => setFormulaPickerVisible((prev) => !prev)}>
                 <Text style={addProductName ? styles.customerPickText : styles.customerPickPlaceholder}>
                   {addProductName
                     ? addProductName
@@ -860,7 +860,44 @@ export function OfferScreen() {
                       ? '加载产品列表…'
                       : '请选择产品'}
                 </Text>
+                <Ionicons
+                  name={formulaPickerVisible ? 'chevron-up-outline' : 'chevron-down-outline'}
+                  size={18}
+                  color="#64748b"
+                />
               </Pressable>
+              {formulaPickerVisible ? (
+                <View style={styles.inlineFormulaPanel}>
+                  {formulasLoading ? (
+                    <View style={styles.inlineFormulaLoading}>
+                      <ActivityIndicator />
+                      <Text style={styles.inlineFormulaLoadingText}>加载产品列表…</Text>
+                    </View>
+                  ) : formulas.length === 0 ? (
+                    <Text style={styles.empty}>暂无产品公式，请先在「产品」中维护</Text>
+                  ) : (
+                    <ScrollView
+                      style={styles.inlineFormulaList}
+                      nestedScrollEnabled={Platform.OS === 'android'}
+                      keyboardShouldPersistTaps="always"
+                    >
+                      {formulas.map((item, index) => (
+                        <Pressable
+                          key={`${item.name}-${item.unit}-${item.parameters}-${index}`}
+                          style={styles.formulaRow}
+                          onPress={() => {
+                            setAddProductName(item.name);
+                            setFormulaPickerVisible(false);
+                          }}
+                        >
+                          <Text style={styles.formulaName}>{item.name}</Text>
+                          <Text style={styles.formulaSub}>{item.unit} · {item.parameters || '—'}</Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  )}
+                </View>
+              ) : null}
               <Text style={styles.fieldLabel}>
                 <Text style={styles.required}>* </Text>过磅价（称重单价）
               </Text>
@@ -918,33 +955,6 @@ export function OfferScreen() {
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
-        </View>
-      </Modal>
-
-      <Modal visible={formulaPickerVisible} transparent animationType="fade" onRequestClose={() => setFormulaPickerVisible(false)}>
-        <View style={styles.formulaModalWrap}>
-          <Pressable style={styles.formulaModalBackdrop} onPress={() => setFormulaPickerVisible(false)} />
-          <View style={styles.pickerSheet}>
-            <Text style={styles.modalTitle}>选择产品</Text>
-            <FlatList
-              data={formulas}
-              keyExtractor={(item, index) => `${item.name}-${item.unit}-${item.parameters}-${index}`}
-              style={styles.formulaList}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={styles.formulaRow}
-                  onPress={() => {
-                    setAddProductName(item.name);
-                    setFormulaPickerVisible(false);
-                  }}
-                >
-                  <Text style={styles.formulaName}>{item.name}</Text>
-                  <Text style={styles.formulaSub}>{item.unit} · {item.parameters || '—'}</Text>
-                </Pressable>
-              )}
-              ListEmptyComponent={<Text style={styles.empty}>暂无产品公式，请先在「产品」中维护</Text>}
-            />
-          </View>
         </View>
       </Modal>
 
@@ -1081,6 +1091,9 @@ const styles = StyleSheet.create({
     color: '#aab4c7',
   },
   customerPickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: '#dbe1ec',
     borderRadius: 8,
@@ -1097,6 +1110,28 @@ const styles = StyleSheet.create({
   customerPickPlaceholder: {
     fontSize: 15,
     color: '#aab4c7',
+  },
+  inlineFormulaPanel: {
+    marginTop: -2,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#dbe1ec',
+    borderRadius: 10,
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  inlineFormulaLoading: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  inlineFormulaLoadingText: {
+    fontSize: 13,
+    color: '#64748b',
+  },
+  inlineFormulaList: {
+    maxHeight: 260,
   },
   editingQuoteHint: {
     marginTop: 8,
@@ -1685,28 +1720,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 15,
   },
-  pickerSheet: {
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    borderRadius: 14,
-    padding: 14,
-    maxHeight: '70%',
-    width: '92%',
-    alignSelf: 'center',
-  },
-  formulaModalWrap: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  formulaModalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-  },
-  formulaList: {
-    maxHeight: 360,
-  },
   formulaRow: {
     paddingVertical: 12,
+    paddingHorizontal: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#eef2f7',
   },
