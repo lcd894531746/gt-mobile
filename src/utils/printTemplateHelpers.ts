@@ -409,12 +409,9 @@ export function normalizeImportedTemplate(raw: unknown): TemplateDoc | null {
       }
       if (c.type === 'Table') {
         const tbl = base as TemplateTable;
-        const cols = (tbl.columns ?? []).map((col) => ({
-          ...col,
-          dataIndex: normalizeTableColumnDataIndex(col.dataIndex) || col.dataIndex,
-          textAlign: 'center' as const,
-        }));
-        return { ...tbl, textAlign: 'center', columns: cols };
+        const normalizedTable = { ...tbl, textAlign: 'center' as const };
+        ensureQuoteItemsTableColumns(normalizedTable);
+        return normalizedTable;
       }
       if (base.type === 'Input' || base.type === 'Tag') {
         return { ...base, textAlign: 'center' };
@@ -451,6 +448,54 @@ function setComponentFrame(
   if (frame.fontSize != null) comp.fontSize = frame.fontSize;
   if (frame.fontWeight != null) comp.fontWeight = frame.fontWeight;
   if (frame.textAlign != null) comp.textAlign = frame.textAlign;
+}
+
+function ensureQuoteItemsTableColumns(table: TemplateTable) {
+  const normalizedColumns = (table.columns ?? []).map((col) => ({
+    ...col,
+    dataIndex: normalizeTableColumnDataIndex(col.dataIndex) || col.dataIndex,
+    textAlign: 'center' as const,
+  }));
+
+  if (String(table.id) !== 'quote-items-table') {
+    table.columns = normalizedColumns;
+    return;
+  }
+
+  normalizedColumns.forEach((col) => {
+    const fallbackTitle = tableColumnDataIndexLabel(col.dataIndex);
+    const rawTitle = String(col.title ?? '').trim();
+    if (col.dataIndex === 'material') {
+      col.title = fallbackTitle;
+      return;
+    }
+    if (!rawTitle || /^[?？]+$/.test(rawTitle)) {
+      col.title = fallbackTitle;
+    }
+  });
+
+  const hasMaterial = normalizedColumns.some((col) => col.dataIndex === 'material');
+  if (hasMaterial) {
+    table.columns = normalizedColumns;
+    return;
+  }
+
+  const materialColumn = {
+    title: '材质',
+    dataIndex: 'material',
+    key: 'col-material',
+    width: 90,
+    textAlign: 'center' as const,
+  };
+  const nameIndex = normalizedColumns.findIndex((col) => col.dataIndex === 'name');
+
+  if (nameIndex >= 0) {
+    normalizedColumns.splice(nameIndex + 1, 0, materialColumn);
+  } else {
+    normalizedColumns.unshift(materialColumn);
+  }
+
+  table.columns = normalizedColumns;
 }
 
 function applySuzhongQuoteCanonicalLayout(components: TemplateComponent[]) {
@@ -527,6 +572,7 @@ function applySuzhongQuoteCanonicalLayout(components: TemplateComponent[]) {
   table.fontSize = 16;
   table.rowHeight = 36;
   table.textAlign = 'center';
+  ensureQuoteItemsTableColumns(table);
 
   const sumTop = table.y + table.height;
   setComponentFrame(byId('sum-label'), {

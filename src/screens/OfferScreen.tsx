@@ -44,6 +44,7 @@ import {
   type CustomerRow,
 } from '../utils/offerHelpers';
 import { buildTemplatePrintHtml, printHtmlInBrowser } from '../utils/printTemplatePrint';
+import { exportQuoteToExcelInBrowser } from '../utils/quoteExcelWebExport';
 import { calculateWeight, roundTo } from '../utils/weightCalculator';
 
 type FormulaOpt = {
@@ -1174,6 +1175,14 @@ export function OfferScreen() {
     setBusyAction('export');
     try {
       const artifacts = buildQuoteSaveArtifacts(saveCompanyName);
+      const shareFileName = `${artifacts.orderNumber || `quote_${Date.now()}`}.xlsx`;
+
+      if (Platform.OS === 'web') {
+        await exportQuoteToExcelInBrowser(artifacts.payload, shareFileName);
+        Alert.alert('成功', 'Excel 已开始下载');
+        return;
+      }
+
       const raw = await exportQuoteToExcel(artifacts.payload);
       const buffer =
         raw instanceof ArrayBuffer
@@ -1186,7 +1195,7 @@ export function OfferScreen() {
       }
 
       const fileName = `${artifacts.orderNumber || `quote_${Date.now()}`}.xlsx`;
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if ((Platform.OS as string) === 'web' && typeof window !== 'undefined') {
         const blob = new Blob([buffer], {
           type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         });
