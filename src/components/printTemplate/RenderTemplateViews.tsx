@@ -5,7 +5,12 @@ import type {
   TemplateInput,
   TemplateTable,
 } from '../../types/printTemplate';
-import { bindToDisplay, getByPath, resolveTableRowCellDisplay } from '../../utils/printTemplateHelpers';
+import {
+  bindToDisplay,
+  getPreviewValue,
+  resolveTableRowCellDisplay,
+  resolveTemplateInputText,
+} from '../../utils/printTemplateHelpers';
 
 export type PreviewRecord = Record<string, unknown>;
 
@@ -20,11 +25,11 @@ export function resolveInputText(
   totalPages: number,
 ): string {
   const bind = comp.bindTo?.trim();
-  if (!bind) return comp.placeholder ?? '';
+  if (!bind) return resolveTemplateInputText(comp, preview);
   if (isPagedBind(bind) && totalPages > 1 && pageIndex < totalPages - 1) {
     return '见下页';
   }
-  return bindToDisplay(getByPath(preview, bind));
+  return bindToDisplay(getPreviewValue(preview, bind));
 }
 
 function tagColors(color?: string): { bg: string; fg: string } {
@@ -52,7 +57,7 @@ export function RenderTemplateComponent(props: {
 }) {
   const { comp, preview, scale, pageIndex = 0, totalPages = 1, selected } = props;
   const fs = (comp.fontSize ?? 14) * scale;
-  const borderW = comp.showBorder ? StyleSheet.hairlineWidth * (scale < 1 ? 2 : 1) : 0;
+  const borderW = comp.showBorder ? StyleSheet.hairlineWidth : 0;
 
   const frameStyle: ViewStyle = {
     width: '100%' as const,
@@ -84,7 +89,16 @@ export function RenderTemplateComponent(props: {
             },
           ]}
         >
-          <Text style={{ fontSize: fs, color: comp.color ?? '#111827', textAlign: 'left' }}>{txt}</Text>
+          <Text
+            style={{
+              fontSize: fs,
+              color: comp.color ?? '#111827',
+              textAlign: comp.textAlign ?? 'left',
+              fontWeight: comp.fontWeight as 'normal' | 'bold' | undefined,
+            }}
+          >
+            {txt}
+          </Text>
         </View>
       );
     }

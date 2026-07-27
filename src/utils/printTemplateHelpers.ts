@@ -53,6 +53,98 @@ export function bindToDisplay(value: unknown): string {
   return String(value);
 }
 
+function firstPreviewText(preview: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = getByPath(preview, key);
+    const text = bindToDisplay(value).trim();
+    if (text !== '') return text;
+  }
+  return '';
+}
+
+export function formatCnDateText(value: unknown): string {
+  if (value == null || value === '') return '';
+  const date = value instanceof Date ? value : new Date(value as string | number);
+  if (Number.isNaN(date.getTime())) return String(value);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}年${pad(date.getMonth() + 1)}月${pad(date.getDate())}日`;
+}
+
+export function formatMoneyText(value: unknown, digits = 2): string {
+  if (value == null || value === '') return '';
+  const normalized = String(value).replace(/,/g, '').trim();
+  const num = Number(normalized);
+  if (!Number.isFinite(num)) return String(value);
+  return num.toFixed(digits);
+}
+
+export function getPreviewValue(preview: Record<string, unknown>, bindTo: string | undefined): unknown {
+  const bind = bindTo?.trim();
+  if (!bind) return '';
+  const exact = getByPath(preview, bind);
+  if (exact !== '') return exact;
+
+  const aliases: Record<string, string[]> = {
+    totalAmount: ['应收金额', '金额', '总金额', '小写', '合计金额', 'total_amount'],
+    totalAmountInWords: ['金额大写', '大写', '合计（大写）', '合计(大写)', 'amount_in_words'],
+    orderDate: ['日期', '报价日期', 'order_date'],
+  };
+
+  for (const [canonical, names] of Object.entries(aliases)) {
+    if (bind === canonical || names.includes(bind)) {
+      return getByPath(preview, canonical) || names.map((name) => getByPath(preview, name)).find((value) => value !== '') || '';
+    }
+  }
+
+  return '';
+}
+
+export function resolveTemplateInputText(comp: Pick<TemplateInput, 'id' | 'bindTo' | 'placeholder'>, preview: Record<string, unknown>): string {
+  const bind = comp.bindTo?.trim();
+  if (bind) {
+    return bindToDisplay(getPreviewValue(preview, bind));
+  }
+
+  const id = String(comp.id ?? '').trim();
+  switch (id) {
+    case 'company-title':
+      return firstPreviewText(preview, ['companyName', '公司名称']);
+    case 'quote-title':
+      return '产品报价单';
+    case 'info-l-1':
+      return `客户单位： ${firstPreviewText(preview, ['customerName', '客户名称'])}`;
+    case 'info-l-2':
+      return `客户电话： ${firstPreviewText(preview, ['customerPhone', '联系电话', 'phone'])}`;
+    case 'info-l-3':
+      return `联 系 人： ${firstPreviewText(preview, ['contactPerson', '联系人'])}`;
+    case 'info-l-4':
+      return `客户地址： ${firstPreviewText(preview, ['customerAddress', '客户地址'])}`;
+    case 'info-r-1':
+      return `业务经办人： ${firstPreviewText(preview, ['businessPerson', '业务经办人'])}`;
+    case 'info-r-2': {
+      const phone = firstPreviewText(preview, ['companyPhone', 'companyTel', 'companyTelephone']);
+      const fax = firstPreviewText(preview, ['companyFax', 'fax']);
+      return `电话： ${phone}${fax ? `  传真： ${fax}` : '  传真：'}`;
+    }
+    case 'info-r-3':
+      return `地址： ${firstPreviewText(preview, ['companyAddress', '公司地址'])}`;
+    case 'info-r-4':
+      return '币种： 人民币（RMB）';
+    case 'sum-label':
+      return '合计（大写）：';
+    case 'sum-words':
+      return firstPreviewText(preview, ['totalAmountInWords', '金额大写', '大写']);
+    case 'sum-number':
+      return `小写： ¥${formatMoneyText(firstPreviewText(preview, ['totalAmount', '应收金额', '金额', '总金额']) || '0')}`;
+    case 'secret':
+      return '产品报价，请注意保密。';
+    case 'date':
+      return `日期： ${formatCnDateText(firstPreviewText(preview, ['orderDate', '日期']) || new Date())}`;
+    default:
+      return comp.placeholder ?? '';
+  }
+}
+
 /**
  * 与桌面打印模板 chunk 346 一致：EXE 下拉「数据绑定」展示中文 label，JSON 里 bindTo 存 canonical（每组第一项）。
  * 打印时会按别名数组解析字段（见桌面 s/c/d 辅助函数）。
@@ -135,6 +227,7 @@ export type PrintTemplateTableColumnBindOption = {
 export const PRINT_TEMPLATE_TABLE_COLUMN_BIND: PrintTemplateTableColumnBindOption[] = [
   { label: '序号', dataIndex: 'index', aliases: ['序号', 'id'] },
   { label: '品名', dataIndex: 'name', aliases: ['品名', 'productName', 'product_name'] },
+  { label: '材质', dataIndex: 'material', aliases: ['材质', 'material'] },
   { label: '规格', dataIndex: 'specification', aliases: ['规格', 'spec', 'product_spec'] },
   { label: '单位', dataIndex: 'unit', aliases: ['单位', 'unitName'] },
   { label: '数量', dataIndex: 'quantity', aliases: ['数量', 'amount'] },
@@ -212,6 +305,7 @@ export function defaultPreviewData(): Record<string, unknown> {
     items: Array.from({ length: 12 }).map((_, i) => ({
       index: String(i + 1),
       name: `产品${i + 1}`,
+      material: `材质${i + 1}`,
       specification: `规格${i + 1}`,
       quantity: String((i + 1) * 2),
       unitPrice: (100 + i * 10).toFixed(2),
@@ -271,7 +365,8 @@ export function createDefaultTable(): TemplateComponent {
     rows: 8,
     columns: [
       { title: '列1', dataIndex: 'name', key: 'col-name', textAlign: 'center' },
-      { title: '列2', dataIndex: 'specification', key: 'col-spec', textAlign: 'center' },
+      { title: '列2', dataIndex: 'material', key: 'col-material', textAlign: 'center' },
+      { title: '列3', dataIndex: 'specification', key: 'col-spec', textAlign: 'center' },
     ],
     dataSource: [],
   };
@@ -327,4 +422,128 @@ export function normalizeImportedTemplate(raw: unknown): TemplateDoc | null {
       return base;
     }),
   };
+}
+
+function cloneTemplateComponent<T extends TemplateComponent>(comp: T): T {
+  if (comp.type === 'Table') {
+    return {
+      ...comp,
+      columns: comp.columns ? comp.columns.map((col) => ({ ...col })) : [],
+      dataSource: Array.isArray(comp.dataSource) ? comp.dataSource.map((row) => ({ ...row })) : [],
+    } as T;
+  }
+  return { ...comp };
+}
+
+function findComponentIndexById(components: TemplateComponent[], id: string) {
+  return components.findIndex((comp) => String(comp.id) === id);
+}
+
+export function normalizeTemplateLayout(doc: TemplateDoc): TemplateDoc {
+  const components = doc.components.map((comp) => cloneTemplateComponent(comp));
+  const tableIndex = findComponentIndexById(components, 'quote-items-table');
+  const tableComp = tableIndex >= 0 && components[tableIndex]?.type === 'Table'
+    ? (components[tableIndex] as TemplateTable)
+    : null;
+
+  if (tableComp) {
+    const tableLeft = tableComp.x;
+    const tableRight = tableComp.x + tableComp.width;
+
+    const infoLeftIds = ['info-l-1', 'info-l-2', 'info-l-3', 'info-l-4'];
+    const infoRightIds = ['info-r-1', 'info-r-2', 'info-r-3', 'info-r-4'];
+    const infoLeftIndexes = infoLeftIds.map((id) => findComponentIndexById(components, id)).filter((idx) => idx >= 0);
+    const infoRightIndexes = infoRightIds.map((id) => findComponentIndexById(components, id)).filter((idx) => idx >= 0);
+
+    if (infoLeftIndexes.length > 0 && infoRightIndexes.length > 0) {
+      const totalWidth = tableRight - tableLeft;
+      const halfWidth = Math.round(totalWidth / 2);
+      const leftWidth = halfWidth;
+      const rightX = tableLeft + leftWidth;
+      const rightWidth = tableRight - rightX;
+
+      infoLeftIndexes.forEach((idx) => {
+        const comp = components[idx];
+        if (!comp) return;
+        comp.x = tableLeft;
+        comp.width = leftWidth;
+      });
+      infoRightIndexes.forEach((idx) => {
+        const comp = components[idx];
+        if (!comp) return;
+        comp.x = rightX;
+        comp.width = rightWidth;
+      });
+    }
+
+    const sumLabelIndex = findComponentIndexById(components, 'sum-label');
+    const sumWordsIndex = findComponentIndexById(components, 'sum-words');
+    const sumNumberIndex = findComponentIndexById(components, 'sum-number');
+    if (sumLabelIndex >= 0 && sumWordsIndex >= 0 && sumNumberIndex >= 0) {
+      const sumLabel = components[sumLabelIndex];
+      const sumWords = components[sumWordsIndex];
+      const sumNumber = components[sumNumberIndex];
+      const labelWidth = sumWords.x - sumLabel.x;
+      const numberWidth = sumNumber.width;
+      sumLabel.x = tableLeft;
+      sumLabel.width = labelWidth;
+      sumWords.x = sumLabel.x + labelWidth;
+      sumNumber.x = tableRight - numberWidth;
+      sumWords.width = sumNumber.x - sumWords.x;
+      sumNumber.width = tableRight - sumNumber.x;
+    }
+  }
+
+  return {
+    ...doc,
+    components,
+  };
+}
+
+export type BorderSides = {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+};
+
+function overlapSize(aStart: number, aEnd: number, bStart: number, bEnd: number) {
+  return Math.max(0, Math.min(aEnd, bEnd) - Math.max(aStart, bStart));
+}
+
+export function resolveComponentBorderSides(
+  components: TemplateComponent[],
+  target: TemplateComponent,
+  tolerance = 1,
+): BorderSides {
+  if (!target.showBorder) {
+    return { top: 0, right: 0, bottom: 0, left: 0 };
+  }
+
+  const sides: BorderSides = { top: 1, right: 1, bottom: 1, left: 1 };
+  const targetLeft = target.x;
+  const targetRight = target.x + target.width;
+  const targetTop = target.y;
+  const targetBottom = target.y + target.height;
+
+  for (const other of components) {
+    if (other === target || !other.showBorder) continue;
+    const otherLeft = other.x;
+    const otherRight = other.x + other.width;
+    const otherTop = other.y;
+    const otherBottom = other.y + other.height;
+    const verticalOverlap = overlapSize(targetTop, targetBottom, otherTop, otherBottom);
+    const horizontalOverlap = overlapSize(targetLeft, targetRight, otherLeft, otherRight);
+
+    if (verticalOverlap > 0) {
+      if (Math.abs(otherRight - targetLeft) <= tolerance) sides.left = 0;
+      if (Math.abs(otherLeft - targetRight) <= tolerance) sides.right = 0;
+    }
+    if (horizontalOverlap > 0) {
+      if (Math.abs(otherBottom - targetTop) <= tolerance) sides.top = 0;
+      if (Math.abs(otherTop - targetBottom) <= tolerance) sides.bottom = 0;
+    }
+  }
+
+  return sides;
 }

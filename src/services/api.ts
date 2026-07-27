@@ -3,6 +3,7 @@ import md5 from 'md5';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config/env';
 import { clearAuth } from './storage';
+import type { TemplateDoc } from '../types/printTemplate';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -207,6 +208,13 @@ export async function createQuote(payload: Record<string, unknown>) {
   return data;
 }
 
+export async function exportQuoteToExcel(payload: Record<string, unknown>) {
+  const { data } = await api.post<ArrayBuffer>('/exportToExcel', payload, {
+    responseType: 'arraybuffer',
+  });
+  return data;
+}
+
 export async function updateQuoteStatus(orderNo: string, payload: Record<string, unknown>) {
   const { data } = await api.put(`/updateQuoteStatus/${encodeURIComponent(orderNo)}`, payload);
   return data;
@@ -287,6 +295,30 @@ export async function fetchRemoteTemplateConfig(templateName: string): Promise<u
       return null;
     }
   }
+}
+
+export async function fetchRemoteTemplates(): Promise<TemplateDoc[]> {
+  const { data } = await api.get('/api/print-templates');
+  if (Array.isArray(data)) return data as TemplateDoc[];
+  if (data && typeof data === 'object' && Array.isArray((data as { data?: unknown }).data)) {
+    return (data as { data: TemplateDoc[] }).data;
+  }
+  return [];
+}
+
+export async function createRemoteTemplate(template: TemplateDoc) {
+  const { data } = await api.post('/api/print-templates', template);
+  return data;
+}
+
+export async function updateRemoteTemplate(name: string, template: TemplateDoc) {
+  const { data } = await api.put(`/api/print-templates/${encodeURIComponent(name)}`, template);
+  return data;
+}
+
+export async function deleteRemoteTemplate(name: string) {
+  const { data } = await api.delete(`/api/print-templates/${encodeURIComponent(name)}`);
+  return data;
 }
 
 export { api };

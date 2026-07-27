@@ -445,30 +445,46 @@ function cellBreakdownPrice(line: QuoteRecord, key: string): string {
 }
 
 /** 与桌面端报价明细表字段对齐；横向滑动查看全部列 */
-const ORDER_DETAIL_COLUMNS: { width: number; title: string; cell: (line: QuoteRecord) => string }[] = [
+const ORDER_DETAIL_COLUMNS: { minWidth: number; title: string; cell: (line: QuoteRecord) => string }[] = [
   {
-    width: 114,
+    minWidth: 114,
     title: '产品名称',
     cell: (line) => stringFromDetailField(line['品名'] ?? line['产品名称'] ?? line.name),
   },
-  { width: 128, title: '规格', cell: (line) => stringFromDetailField(line['规格']) },
-  { width: 44, title: '单位', cell: (line) => stringFromDetailField(line['单位']) },
-  { width: 52, title: '数量', cell: (line) => formatDetailQty(line['数量']) },
-  { width: 78, title: '单价', cell: (line) => formatDetailMoney(line['单价']) },
-  { width: 78, title: '金额', cell: (line) => formatDetailMoney(line['金额']) },
-  { width: 86, title: '理论重量', cell: (line) => formatDetailWeight(line['理论重量']) },
-  { width: 76, title: '总重量', cell: (line) => formatDetailWeight(line['总重量']) },
-  { width: 72, title: '重量1', cell: (line) => cellBreakdownWeight(line, '重量1') },
-  { width: 72, title: '重量2', cell: (line) => cellBreakdownWeight(line, '重量2') },
-  { width: 72, title: '重量3', cell: (line) => cellBreakdownWeight(line, '重量3') },
-  { width: 72, title: '单价1', cell: (line) => cellBreakdownPrice(line, '单价1') },
-  { width: 72, title: '单价2', cell: (line) => cellBreakdownPrice(line, '单价2') },
-  { width: 72, title: '单价3', cell: (line) => cellBreakdownPrice(line, '单价3') },
-  { width: 88, title: '称重单价', cell: (line) => stringFromDetailField(line['称重单价'], '—') },
-  { width: 96, title: '备注', cell: (line) => stringFromDetailField(line['备注'], '—') },
+  { minWidth: 128, title: '规格', cell: (line) => stringFromDetailField(line['规格']) },
+  { minWidth: 44, title: '单位', cell: (line) => stringFromDetailField(line['单位']) },
+  { minWidth: 52, title: '数量', cell: (line) => formatDetailQty(line['数量']) },
+  { minWidth: 78, title: '单价', cell: (line) => formatDetailMoney(line['单价']) },
+  { minWidth: 78, title: '金额', cell: (line) => formatDetailMoney(line['金额']) },
+  { minWidth: 86, title: '理论重量', cell: (line) => formatDetailWeight(line['理论重量']) },
+  { minWidth: 76, title: '总重量', cell: (line) => formatDetailWeight(line['总重量']) },
+  { minWidth: 72, title: '重量1', cell: (line) => cellBreakdownWeight(line, '重量1') },
+  { minWidth: 72, title: '重量2', cell: (line) => cellBreakdownWeight(line, '重量2') },
+  { minWidth: 72, title: '重量3', cell: (line) => cellBreakdownWeight(line, '重量3') },
+  { minWidth: 72, title: '单价1', cell: (line) => cellBreakdownPrice(line, '单价1') },
+  { minWidth: 72, title: '单价2', cell: (line) => cellBreakdownPrice(line, '单价2') },
+  { minWidth: 72, title: '单价3', cell: (line) => cellBreakdownPrice(line, '单价3') },
+  { minWidth: 88, title: '称重单价', cell: (line) => stringFromDetailField(line['称重单价'], '—') },
+  { minWidth: 96, title: '备注', cell: (line) => stringFromDetailField(line['备注'], '—') },
 ];
 
-const ORDER_DETAIL_TABLE_MIN_WIDTH = ORDER_DETAIL_COLUMNS.reduce((s, c) => s + c.width, 0);
+function autoCellWidth(text: string, minWidth: number): number {
+  const normalized = text.trim();
+  if (!normalized) return minWidth;
+  const estimated = Array.from(normalized).reduce((sum, ch) => sum + (/[\u4e00-\u9fff]/.test(ch) ? 14 : 8), 28);
+  return Math.max(minWidth, Math.ceil(estimated));
+}
+
+function orderDetailColumnWidths(lines: QuoteRecord[]): number[] {
+  return ORDER_DETAIL_COLUMNS.map((col) =>
+    Math.max(
+      autoCellWidth(col.title, col.minWidth),
+      ...lines.map((line) => autoCellWidth(col.cell(line), col.minWidth)),
+    ),
+  );
+}
+
+const ORDER_DETAIL_TABLE_MIN_WIDTH = ORDER_DETAIL_COLUMNS.reduce((s, c) => s + c.minWidth, 0);
 
 function productLineAmount(row: QuoteRecord): number {
   const v = Number(row['金额'] ?? row.amount ?? row.total ?? 0);
@@ -2379,27 +2395,29 @@ function QuoteDetailLinesView({ detail }: { detail: unknown }) {
       </ScrollView>
     );
   }
+  const colWidths = orderDetailColumnWidths(lines);
+  const tableWidth = Math.max(ORDER_DETAIL_TABLE_MIN_WIDTH, colWidths.reduce((sum, width) => sum + width, 0));
 
   return (
     <ScrollView {...scrollProps}>
       <Text style={styles.orderDetailTableCaption}>共 {lines.length} 条产品明细 · 左右滑动查看全部列</Text>
       <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator>
-        <View>
-          <View style={styles.orderDetailTableHead}>
-            {ORDER_DETAIL_COLUMNS.map((col) => (
-              <Text key={col.title} style={[styles.orderDetailTh, { width: col.width }]}>
+        <View style={{ minWidth: tableWidth }}>
+          <View style={[styles.orderDetailTableHead, { minWidth: tableWidth }]}>
+            {ORDER_DETAIL_COLUMNS.map((col, idx) => (
+              <Text key={col.title} style={[styles.orderDetailTh, { minWidth: colWidths[idx] }]} numberOfLines={1}>
                 {col.title}
               </Text>
             ))}
           </View>
           {lines.map((line, idx) => (
-            <View key={`${String(line.id ?? 'row')}-${idx}`} style={styles.orderDetailTableRow}>
-              {ORDER_DETAIL_COLUMNS.map((col) => (
+            <View key={`${String(line.id ?? 'row')}-${idx}`} style={[styles.orderDetailTableRow, { minWidth: tableWidth }]}>
+              {ORDER_DETAIL_COLUMNS.map((col, colIdx) => (
                 <Text
                   key={`${col.title}-${idx}`}
-                  style={[styles.orderDetailTd, { width: col.width }]}
+                  style={[styles.orderDetailTd, { minWidth: colWidths[colIdx] }]}
                   selectable
-                  numberOfLines={5}
+                  numberOfLines={1}
                 >
                   {col.cell(line)}
                 </Text>

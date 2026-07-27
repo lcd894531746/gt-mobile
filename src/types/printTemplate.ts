@@ -27,6 +27,7 @@ export interface PrintComponentBase {
   width: number;
   height: number;
   fontSize?: number;
+  fontWeight?: string;
   rowHeight?: number;
   textAlign?: TemplateTextAlign;
   showBorder?: boolean;
@@ -52,6 +53,7 @@ export interface TemplateTable extends PrintComponentBase {
   columns?: TemplateColumnDef[];
   rows?: number;
   dataSource?: TemplateTableRow[];
+  preferDataSource?: boolean;
 }
 
 export interface TemplateImage extends PrintComponentBase {

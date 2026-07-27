@@ -22,7 +22,14 @@ import {
 import { PrintTemplateCanvas } from '../components/printTemplate/PrintTemplateCanvas';
 import type { PreviewRecord } from '../components/printTemplate/RenderTemplateViews';
 import { PageScaffold } from '../components/PageScaffold';
-import { fetchRemotePrintTemplateNames, fetchRemoteTemplateConfig } from '../services/api';
+import {
+  createRemoteTemplate,
+  deleteRemoteTemplate,
+  fetchRemotePrintTemplateNames,
+  fetchRemoteTemplateConfig,
+  fetchRemoteTemplates,
+  updateRemoteTemplate,
+} from '../services/api';
 import type {
   PaperOrientation,
   PaperSizeKey,
@@ -59,6 +66,14 @@ import {
 type Props = {
   embedInStackHeader?: boolean;
 };
+
+function mergeTemplateDocs(primary: TemplateDoc[], secondary: TemplateDoc[]) {
+  const merged = new Map<string, TemplateDoc>();
+  for (const row of [...secondary, ...primary]) {
+    merged.set(row.name, row);
+  }
+  return Array.from(merged.values());
+}
 
 export function PrintTemplateEditorScreen({ embedInStackHeader }: Props = {}) {
   const [listLoading, setListLoading] = useState(true);
@@ -106,8 +121,12 @@ export function PrintTemplateEditorScreen({ embedInStackHeader }: Props = {}) {
   }, [editorDoc, screenW, canvasHostLayout.w, canvasHostLayout.h]);
 
   const reloadList = useCallback(async () => {
-    const rows = await loadTemplatesFromDevice();
-    setTemplates(rows.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN')));
+    const [localRows, remoteRows] = await Promise.all([
+      loadTemplatesFromDevice(),
+      fetchRemoteTemplates().catch(() => []),
+    ]);
+    const rows = mergeTemplateDocs(remoteRows, localRows).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
+    setTemplates(rows);
   }, []);
 
   useEffect(() => {
@@ -162,9 +181,32 @@ export function PrintTemplateEditorScreen({ embedInStackHeader }: Props = {}) {
   };
 
   const persistDoc = async (doc: TemplateDoc) => {
-    if (initialNameRef.current && initialNameRef.current !== doc.name) {
-      await deleteTemplateOnDevice(initialNameRef.current);
+    const currentName = initialNameRef.current.trim();
+    const nextName = doc.name.trim();
+
+    if (currentName && currentName !== nextName) {
+      await Promise.allSettled([deleteTemplateOnDevice(currentName), deleteRemoteTemplate(currentName)]);
+      await createRemoteTemplate(doc);
+    } else {
+      try {
+        await updateRemoteTemplate(nextName, doc);
+      } catch (error) {
+        const status =
+          typeof error === 'object' &&
+          error &&
+          'response' in error &&
+          typeof (error as { response?: { status?: unknown } }).response === 'object'
+            ? Number((error as { response?: { status?: unknown } }).response?.status)
+            : NaN;
+
+        if (status === 404) {
+          await createRemoteTemplate(doc);
+        } else {
+          throw error;
+        }
+      }
     }
+
     await saveTemplateToDevice(doc);
     initialNameRef.current = doc.name;
     await reloadList();
@@ -178,9 +220,9 @@ export function PrintTemplateEditorScreen({ embedInStackHeader }: Props = {}) {
     }
     try {
       await persistDoc(editorDoc);
-      Alert.alert('成功', '模板已保存到本机');
+      Alert.alert('成功', '模板已保存到服务器，并同步缓存到当前浏览器。');
     } catch (e) {
-      Alert.alert('失败', e instanceof Error ? e.message : '保存失败');
+      Alert.alert('失败', e instanceof Error ? e.message : '模板保存失败');
     }
   };
 
@@ -507,7 +549,7 @@ export function PrintTemplateEditorScreen({ embedInStackHeader }: Props = {}) {
         text: '删除',
         style: 'destructive',
         onPress: async () => {
-          await deleteTemplateOnDevice(name);
+          await Promise.allSettled([deleteTemplateOnDevice(name), deleteRemoteTemplate(name)]);
           await reloadList();
         },
       },
@@ -577,9 +619,20 @@ export function PrintTemplateEditorScreen({ embedInStackHeader }: Props = {}) {
                   {PAPER_MM[normalizePaperKey(item.paperSize)].label} · {item.components.length} 个组件
                 </Text>
               </View>
-              <Pressable hitSlop={10} onPress={() => deleteTemplateRow(item.name)} accessibilityLabel="删除模板">
-                <Ionicons name="trash-outline" size={18} color="#dc2626" />
-              </Pressable>
+              <View style={styles.rowActions}>
+                <Pressable
+                  style={styles.rowEditBtn}
+                  hitSlop={10}
+                  onPress={() => openEdit(item)}
+                  accessibilityLabel="编辑模板"
+                >
+                  <Ionicons name="create-outline" size={16} color="#204dff" />
+                  <Text style={styles.rowEditText}>编辑</Text>
+                </Pressable>
+                <Pressable hitSlop={10} onPress={() => deleteTemplateRow(item.name)} accessibilityLabel="删除模板">
+                  <Ionicons name="trash-outline" size={18} color="#dc2626" />
+                </Pressable>
+              </View>
             </Pressable>
           )}
         />
@@ -1291,6 +1344,27 @@ const styles = StyleSheet.create({
   },
   rowTitle: { fontSize: 16, fontWeight: '700', color: '#102248' },
   rowSub: { marginTop: 4, fontSize: 12, color: '#64748b' },
+  rowActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  rowEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#bfd0ff',
+    backgroundColor: '#f7f9ff',
+  },
+  rowEditText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#204dff',
+  },
   empty: { alignItems: 'center', paddingHorizontal: 20, paddingVertical: 48, gap: 8 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: '#475569' },
   emptySub: { fontSize: 13, color: '#94a3b8', textAlign: 'center', lineHeight: 20 },

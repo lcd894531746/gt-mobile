@@ -96,6 +96,25 @@ function normalizeDetailLines(raw: unknown): QuoteRecord[] {
   return [];
 }
 
+const DETAIL_COLUMNS = [
+  { key: '品名', title: '品名', minWidth: 88, value: (line: QuoteRecord) => String(line['品名'] ?? '') },
+  { key: '规格', title: '规格', minWidth: 88, value: (line: QuoteRecord) => String(line['规格'] ?? '') },
+  { key: '数量', title: '数量', minWidth: 56, value: (line: QuoteRecord) => String(line['数量'] ?? '') },
+  { key: '单价', title: '单价', minWidth: 80, value: (line: QuoteRecord) => formatMoney(Number(line['单价']) || 0) },
+  { key: '金额', title: '金额', minWidth: 88, value: (line: QuoteRecord) => formatMoney(Number(line['金额']) || 0) },
+  { key: '理论重量', title: '理论重量', minWidth: 96, value: (line: QuoteRecord) => Number(line['理论重量'] || 0).toFixed(6) },
+  { key: '总重量', title: '总重量', minWidth: 96, value: (line: QuoteRecord) => Number(line['总重量'] || 0).toFixed(6) },
+];
+
+function detailCellWidth(text: string, minWidth: number): number {
+  const normalized = text.trim();
+  if (!normalized) return minWidth;
+  const estimated = Array.from(normalized).reduce((sum, ch) => {
+    return sum + (/[\u4e00-\u9fff]/.test(ch) ? 14 : 8);
+  }, 28);
+  return Math.max(minWidth, Math.ceil(estimated));
+}
+
 export function QuoteStatisticsScreen() {
   const insets = useSafeAreaInsets();
   const {
@@ -344,6 +363,17 @@ export function QuoteStatisticsScreen() {
     }
     return { amt, tw, aw };
   }, [detailLines]);
+
+  const detailColumnWidths = useMemo(
+    () =>
+      DETAIL_COLUMNS.map((col) =>
+        Math.max(
+          detailCellWidth(col.title, col.minWidth),
+          ...detailLines.map((line) => detailCellWidth(col.value(line), col.minWidth)),
+        ),
+      ),
+    [detailLines],
+  );
 
   const TABLE_COL = {
     cust: 100,
@@ -722,35 +752,33 @@ export function QuoteStatisticsScreen() {
               <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator>
                 <View>
                   <View style={styles.dtrHead}>
-                    <Text style={[styles.dth, { width: 88 }]}>品名</Text>
-                    <Text style={[styles.dth, { width: 88 }]}>规格</Text>
-                    <Text style={[styles.dth, { width: 56 }]}>数量</Text>
-                    <Text style={[styles.dth, { width: 80 }]}>单价</Text>
-                    <Text style={[styles.dth, { width: 88 }]}>金额</Text>
-                    <Text style={[styles.dth, { width: 96 }]}>理论重量</Text>
-                    <Text style={[styles.dth, { width: 96 }]}>总重量</Text>
+                    {DETAIL_COLUMNS.map((col, idx) => (
+                      <Text key={col.key} style={[styles.dth, { minWidth: detailColumnWidths[idx] }]} numberOfLines={1}>
+                        {col.title}
+                      </Text>
+                    ))}
                   </View>
                   {detailLines.map((line, i) => (
                     <View key={`dl-${i}`} style={[styles.dtr, i % 2 === 1 && styles.dtrAlt]}>
-                      <Text style={[styles.dtd, { width: 88 }]} numberOfLines={2}>
-                        {String(line['品名'])}
-                      </Text>
-                      <Text style={[styles.dtd, { width: 88 }]} numberOfLines={2}>
-                        {String(line['规格'])}
-                      </Text>
-                      <Text style={[styles.dtd, { width: 56 }]}>{String(line['数量'])}</Text>
-                      <Text style={[styles.dtd, { width: 80 }]}>{formatMoney(Number(line['单价']) || 0)}</Text>
-                      <Text style={[styles.dtd, { width: 88 }]}>{formatMoney(Number(line['金额']) || 0)}</Text>
-                      <Text style={[styles.dtd, { width: 96 }]}>{Number(line['理论重量'] || 0).toFixed(6)}</Text>
-                      <Text style={[styles.dtd, { width: 96 }]}>{Number(line['总重量'] || 0).toFixed(6)}</Text>
+                      {DETAIL_COLUMNS.map((col, idx) => (
+                        <Text key={col.key} style={[styles.dtd, { minWidth: detailColumnWidths[idx] }]} numberOfLines={1}>
+                          {col.value(line)}
+                        </Text>
+                      ))}
                     </View>
                   ))}
                   {detailLines.length > 0 ? (
                     <View style={styles.dtrSummary}>
-                      <Text style={[styles.dtd, { width: 88 + 88 + 56 + 80 }]}>合计：</Text>
-                      <Text style={[styles.dtdBold, { width: 88 }]}>{formatMoney(detailTotals.amt)}</Text>
-                      <Text style={[styles.dtdBold, { width: 96 }]}>{detailTotals.tw.toFixed(6)}</Text>
-                      <Text style={[styles.dtdBold, { width: 96 }]}>{detailTotals.aw.toFixed(6)}</Text>
+                      <Text style={[styles.dtd, { minWidth: detailColumnWidths.slice(0, 4).reduce((sum, w) => sum + w, 0) }]}>合计：</Text>
+                      <Text style={[styles.dtdBold, { minWidth: detailColumnWidths[4] }]} numberOfLines={1}>
+                        {formatMoney(detailTotals.amt)}
+                      </Text>
+                      <Text style={[styles.dtdBold, { minWidth: detailColumnWidths[5] }]} numberOfLines={1}>
+                        {detailTotals.tw.toFixed(6)}
+                      </Text>
+                      <Text style={[styles.dtdBold, { minWidth: detailColumnWidths[6] }]} numberOfLines={1}>
+                        {detailTotals.aw.toFixed(6)}
+                      </Text>
                     </View>
                   ) : null}
                 </View>
