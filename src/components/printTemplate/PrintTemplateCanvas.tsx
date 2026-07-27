@@ -185,15 +185,15 @@ function DraggableComponent({
 const styles = StyleSheet.create({
   paper: {
     backgroundColor: '#fff',
-    borderRadius: 4,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#cbd5e1',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#d9e2ec',
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    shadowColor: '#020617',
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
   inner: {
     flex: 1,

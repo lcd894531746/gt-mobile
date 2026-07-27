@@ -6,6 +6,7 @@ import type {
   TemplateTable,
 } from '../../types/printTemplate';
 import {
+  getTemplateBorderTheme,
   bindToDisplay,
   getPreviewValue,
   resolveTableRowCellDisplay,
@@ -57,13 +58,14 @@ export function RenderTemplateComponent(props: {
 }) {
   const { comp, preview, scale, pageIndex = 0, totalPages = 1, selected } = props;
   const fs = (comp.fontSize ?? 14) * scale;
-  const borderW = comp.showBorder ? StyleSheet.hairlineWidth : 0;
+  const borderTheme = getTemplateBorderTheme(comp);
+  const borderW = comp.showBorder ? borderTheme.borderWidth : 0;
 
   const frameStyle: ViewStyle = {
     width: '100%' as const,
     height: '100%' as const,
     borderWidth: borderW,
-    borderColor: selected ? '#204dff' : '#111827',
+    borderColor: selected ? '#204dff' : borderTheme.borderColor,
     overflow: 'hidden' as const,
   };
 
@@ -156,6 +158,7 @@ function TableInner(props: {
   fs: number;
 }) {
   const { comp, preview, scale, frameStyle, fs } = props;
+  const borderTheme = getTemplateBorderTheme(comp);
   const cols = comp.columns ?? [];
   const rowCount = Math.max(1, comp.rows ?? 8);
   const items = (preview.items as Record<string, unknown>[]) ?? [];
@@ -191,6 +194,7 @@ function TableInner(props: {
                 cellFlexStyle(c),
                 {
                   borderRightWidth: StyleSheet.hairlineWidth,
+                  borderColor: borderTheme.gridColor,
                   paddingVertical: 4 * scale,
                   paddingHorizontal: 4 * scale,
                   justifyContent: 'center',
@@ -213,6 +217,7 @@ function TableInner(props: {
                 styles.tr,
                 {
                   borderBottomWidth: StyleSheet.hairlineWidth,
+                  borderColor: borderTheme.gridColor,
                   minHeight: (comp.rowHeight ?? 28) * scale,
                   width: '100%',
                 },
@@ -228,6 +233,7 @@ function TableInner(props: {
                       cellFlexStyle(c),
                       {
                         borderRightWidth: StyleSheet.hairlineWidth,
+                        borderColor: borderTheme.gridColor,
                         paddingVertical: 3 * scale,
                         paddingHorizontal: 4 * scale,
                         justifyContent: 'center',
@@ -266,13 +272,10 @@ const styles = StyleSheet.create({
   tr: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    borderColor: '#cbd5e1',
   },
   thCell: {
-    borderColor: '#cbd5e1',
     justifyContent: 'center',
   },
   tdCell: {
-    borderColor: '#e2e8f0',
   },
 });

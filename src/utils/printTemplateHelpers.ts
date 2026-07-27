@@ -439,8 +439,146 @@ function findComponentIndexById(components: TemplateComponent[], id: string) {
   return components.findIndex((comp) => String(comp.id) === id);
 }
 
+function setComponentFrame(
+  comp: TemplateComponent | undefined,
+  frame: Partial<Pick<TemplateComponent, 'x' | 'y' | 'width' | 'height' | 'fontSize' | 'fontWeight' | 'textAlign'>>,
+) {
+  if (!comp) return;
+  if (frame.x != null) comp.x = frame.x;
+  if (frame.y != null) comp.y = frame.y;
+  if (frame.width != null) comp.width = frame.width;
+  if (frame.height != null) comp.height = frame.height;
+  if (frame.fontSize != null) comp.fontSize = frame.fontSize;
+  if (frame.fontWeight != null) comp.fontWeight = frame.fontWeight;
+  if (frame.textAlign != null) comp.textAlign = frame.textAlign;
+}
+
+function applySuzhongQuoteCanonicalLayout(components: TemplateComponent[]) {
+  const byId = (id: string) => {
+    const index = findComponentIndexById(components, id);
+    return index >= 0 ? components[index] : undefined;
+  };
+
+  const logo = byId('logo');
+  const companyTitle = byId('company-title');
+  const quoteTitle = byId('quote-title');
+  const table = byId('quote-items-table');
+
+  if (!logo || !companyTitle || !quoteTitle || !table || table.type !== 'Table') {
+    return;
+  }
+
+  setComponentFrame(logo, { x: 36, y: 8, width: 94, height: 72 });
+  setComponentFrame(companyTitle, {
+    x: 185,
+    y: 24,
+    width: 425,
+    height: 34,
+    fontSize: 28,
+    fontWeight: '700',
+    textAlign: 'center',
+  });
+  setComponentFrame(quoteTitle, {
+    x: 255,
+    y: 64,
+    width: 280,
+    height: 30,
+    fontSize: 24,
+    fontWeight: '700',
+    textAlign: 'center',
+  });
+
+  const left = 10;
+  const top = 126;
+  const totalWidth = 760;
+  const rowHeight = 32;
+  const midX = 460;
+  const leftWidth = midX - left;
+  const rightWidth = totalWidth - leftWidth;
+
+  const infoLeftIds = ['info-l-1', 'info-l-2', 'info-l-3', 'info-l-4'];
+  const infoRightIds = ['info-r-1', 'info-r-2', 'info-r-3', 'info-r-4'];
+
+  infoLeftIds.forEach((id, index) => {
+    setComponentFrame(byId(id), {
+      x: left,
+      y: top + rowHeight * index,
+      width: leftWidth,
+      height: rowHeight,
+      fontSize: 16,
+      textAlign: 'left',
+    });
+  });
+
+  infoRightIds.forEach((id, index) => {
+    setComponentFrame(byId(id), {
+      x: midX,
+      y: top + rowHeight * index,
+      width: rightWidth,
+      height: rowHeight,
+      fontSize: 16,
+      textAlign: 'left',
+    });
+  });
+
+  table.x = left;
+  table.y = top + rowHeight * 4;
+  table.width = totalWidth;
+  table.fontSize = 16;
+  table.rowHeight = 36;
+  table.textAlign = 'center';
+
+  const sumTop = table.y + table.height;
+  setComponentFrame(byId('sum-label'), {
+    x: left,
+    y: sumTop,
+    width: 150,
+    height: 34,
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'left',
+  });
+  setComponentFrame(byId('sum-words'), {
+    x: left + 150,
+    y: sumTop,
+    width: 430,
+    height: 34,
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'left',
+  });
+  setComponentFrame(byId('sum-number'), {
+    x: left + 580,
+    y: sumTop,
+    width: 190,
+    height: 34,
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+  });
+  setComponentFrame(byId('secret'), {
+    x: left,
+    y: sumTop + 42,
+    width: 260,
+    height: 28,
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'left',
+  });
+  setComponentFrame(byId('date'), {
+    x: 570,
+    y: sumTop + 84,
+    width: 190,
+    height: 28,
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+  });
+}
+
 export function normalizeTemplateLayout(doc: TemplateDoc): TemplateDoc {
   const components = doc.components.map((comp) => cloneTemplateComponent(comp));
+  applySuzhongQuoteCanonicalLayout(components);
   const tableIndex = findComponentIndexById(components, 'quote-items-table');
   const tableComp = tableIndex >= 0 && components[tableIndex]?.type === 'Table'
     ? (components[tableIndex] as TemplateTable)
@@ -507,6 +645,49 @@ export type BorderSides = {
   left: number;
 };
 
+export type TemplateBorderTheme = {
+  borderColor: string;
+  borderWidth: number;
+  gridColor: string;
+};
+
+const EMPHASIS_BORDER_IDS = new Set([
+  'info-l-1',
+  'info-l-2',
+  'info-l-3',
+  'info-l-4',
+  'info-r-1',
+  'info-r-2',
+  'info-r-3',
+  'info-r-4',
+  'sum-label',
+  'sum-words',
+  'sum-number',
+]);
+
+export function getTemplateBorderTheme(comp: Pick<TemplateComponent, 'id' | 'type'>): TemplateBorderTheme {
+  const id = String(comp.id ?? '').trim();
+  if (comp.type === 'Table' || id === 'quote-items-table') {
+    return {
+      borderColor: '#1f2937',
+      borderWidth: 1.5,
+      gridColor: '#cbd5e1',
+    };
+  }
+  if (EMPHASIS_BORDER_IDS.has(id)) {
+    return {
+      borderColor: '#1f2937',
+      borderWidth: 1.35,
+      gridColor: '#cbd5e1',
+    };
+  }
+  return {
+    borderColor: '#111827',
+    borderWidth: 1,
+    gridColor: '#dbe4ef',
+  };
+}
+
 function overlapSize(aStart: number, aEnd: number, bStart: number, bEnd: number) {
   return Math.max(0, Math.min(aEnd, bEnd) - Math.max(aStart, bStart));
 }
@@ -536,12 +717,12 @@ export function resolveComponentBorderSides(
     const horizontalOverlap = overlapSize(targetLeft, targetRight, otherLeft, otherRight);
 
     if (verticalOverlap > 0) {
+      // Keep a single shared vertical line by letting the left component own it.
       if (Math.abs(otherRight - targetLeft) <= tolerance) sides.left = 0;
-      if (Math.abs(otherLeft - targetRight) <= tolerance) sides.right = 0;
     }
     if (horizontalOverlap > 0) {
+      // Keep a single shared horizontal line by letting the upper component own it.
       if (Math.abs(otherBottom - targetTop) <= tolerance) sides.top = 0;
-      if (Math.abs(otherTop - targetBottom) <= tolerance) sides.bottom = 0;
     }
   }
 
