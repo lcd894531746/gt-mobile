@@ -10,6 +10,35 @@ const api = axios.create({
   timeout: 15000,
 });
 
+function getAxiosErrorMessage(error: unknown, fallback: string): string {
+  if (!axios.isAxiosError(error)) {
+    return error instanceof Error ? error.message : fallback;
+  }
+
+  if (error.response) {
+    const payload = error.response.data;
+    if (payload && typeof payload === 'object') {
+      const message = String(
+        (payload as { message?: unknown; error?: unknown }).message ??
+          (payload as { message?: unknown; error?: unknown }).error ??
+          '',
+      ).trim();
+      if (message) return message;
+    }
+    return `${fallback}（HTTP ${error.response.status}）`;
+  }
+
+  if (error.code === 'ECONNABORTED') {
+    return `${fallback}：请求超时`;
+  }
+
+  if (error.request) {
+    return `无法连接服务器：${API_BASE_URL}`;
+  }
+
+  return error.message || fallback;
+}
+
 type UnauthorizedHandler = () => void | Promise<void>;
 
 let unauthorizedHandler: UnauthorizedHandler | null = null;
@@ -188,8 +217,12 @@ export async function fetchQuoteData(params: {
     // 部分后端只认中文查询参数，与报价创建载荷「客户ID」对齐
     q['客户ID'] = v;
   }
-  const { data } = await api.get('/getQuoteData', { params: q });
-  return data;
+  try {
+    const { data } = await api.get('/getQuoteData', { params: q });
+    return data;
+  } catch (error) {
+    throw new Error(getAxiosErrorMessage(error, '获取报价数据失败'));
+  }
 }
 
 export async function fetchQuoteDetail(orderNo: string) {
@@ -204,8 +237,12 @@ export async function fetchUnshippedQuotes() {
 }
 
 export async function createQuote(payload: Record<string, unknown>) {
-  const { data } = await api.post('/createQuote', payload);
-  return data;
+  try {
+    const { data } = await api.post('/createQuote', payload);
+    return data;
+  } catch (error) {
+    throw new Error(getAxiosErrorMessage(error, '保存报价失败'));
+  }
 }
 
 export async function exportQuoteToExcel(payload: Record<string, unknown>) {
@@ -226,8 +263,12 @@ export async function deleteQuote(orderNo: string) {
 }
 
 export async function searchCustomer(query: string) {
-  const { data } = await api.get('/searchCustomer', { params: { query } });
-  return data;
+  try {
+    const { data } = await api.get('/searchCustomer', { params: { query } });
+    return data;
+  } catch (error) {
+    throw new Error(getAxiosErrorMessage(error, '搜索客户失败'));
+  }
 }
 
 export async function addCustomer(payload: Record<string, unknown>) {
@@ -247,8 +288,12 @@ export async function deleteCustomer(id: string | number) {
 }
 
 export async function getFormulas() {
-  const { data } = await api.get('/getFormulas');
-  return data;
+  try {
+    const { data } = await api.get('/getFormulas');
+    return data;
+  } catch (error) {
+    throw new Error(getAxiosErrorMessage(error, '获取产品公式失败'));
+  }
 }
 
 export async function addFormula(payload: Record<string, unknown>) {

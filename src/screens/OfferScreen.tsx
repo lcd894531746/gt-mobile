@@ -7,6 +7,7 @@ import {
   Alert,
   Dimensions,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -85,7 +86,8 @@ type DraftLine = {
 type BusyAction = 'preview' | 'export' | 'print' | 'save' | null;
 
 type QuoteSaveArtifacts = {
-  payload: Record<string, unknown>;
+  exportPayload: Record<string, unknown>;
+  savePayload: Record<string, unknown>;
   previewData: PreviewRecord;
   orderNumber: string;
   customerDisplayName: string;
@@ -771,6 +773,14 @@ export function OfferScreen() {
     setCustomerDropdownVisible(false);
   }, [cancelCustomerBlur]);
 
+  const dismissQuoteTransientUi = useCallback(() => {
+    cancelCustomerBlur();
+    customerInputRef.current?.blur();
+    setCustomerInputFocused(false);
+    setCustomerDropdownVisible(false);
+    Keyboard.dismiss();
+  }, [cancelCustomerBlur]);
+
   const focusCustomerInput = useCallback(() => {
     cancelCustomerBlur();
     setCustomerInputFocused(true);
@@ -782,6 +792,11 @@ export function OfferScreen() {
       customerInputRef.current?.focus();
     });
   }, [cancelCustomerBlur, customerKeyword, performCustomerSearch]);
+
+  useEffect(() => {
+    if (!saveOptionsVisible && !previewVisible) return;
+    dismissQuoteTransientUi();
+  }, [dismissQuoteTransientUi, previewVisible, saveOptionsVisible]);
 
   const loadUnshippedList = useCallback(async () => {
     setUnshippedLoading(true);
@@ -1092,19 +1107,25 @@ export function OfferScreen() {
         items: previewItems,
       };
 
-      const payload: Record<string, unknown> = {
+      const savePayload: Record<string, unknown> = {
         客户ID: customerIdText.trim(),
         产品信息: productLines,
         应收金额: totalAmount,
         isEdit: Boolean(editingQuoteNo),
       };
-      Object.assign(payload, exportBasePayload);
+      // 导出/打印需要更完整的头部信息，但保存报价接口尽量保持最小载荷，避免后端因额外字段报错。
+      const exportPayload: Record<string, unknown> = {
+        ...savePayload,
+      };
+      Object.assign(exportPayload, exportBasePayload);
       if (editingQuoteNo?.trim()) {
-        payload['单号'] = editingQuoteNo.trim();
+        savePayload['单号'] = editingQuoteNo.trim();
+        exportPayload['单号'] = editingQuoteNo.trim();
       }
 
       return {
-        payload,
+        exportPayload,
+        savePayload,
         previewData: preview,
         orderNumber,
         customerDisplayName,
@@ -1130,12 +1151,13 @@ export function OfferScreen() {
 
   const openSaveOptions = useCallback(async () => {
     if (pageBusy || !canOpenSaveOptions) return;
+    dismissQuoteTransientUi();
     setSaveOptionsVisible(true);
     setSaveCompanyOpen(false);
     if (saveTemplates.length === 0) {
       await loadSaveTemplates();
     }
-  }, [canOpenSaveOptions, loadSaveTemplates, pageBusy, saveTemplates.length]);
+  }, [canOpenSaveOptions, dismissQuoteTransientUi, loadSaveTemplates, pageBusy, saveTemplates.length]);
 
   const ensureSaveSelections = useCallback(() => {
     if (!saveCompanyName.trim()) {
@@ -1151,6 +1173,7 @@ export function OfferScreen() {
 
   const handlePreview = useCallback(async () => {
     if (pageBusy || !saveOptionsVisible) return;
+    dismissQuoteTransientUi();
     if (!validateQuoteBeforeSave(normalizedLines)) return;
     if (!ensureSaveSelections()) return;
 
@@ -1159,16 +1182,22 @@ export function OfferScreen() {
       const artifacts = buildQuoteSaveArtifacts(saveCompanyName);
       setPreviewTemplate(selectedTemplateDoc);
       setPreviewData(artifacts.previewData);
-      setPreviewVisible(true);
+      setSaveCompanyOpen(false);
+      setSaveOptionsVisible(false);
+      // iOS 上两个 Modal 同时切换容易表现为“点了没反应”，先收起保存弹层再打开预览层。
+      setTimeout(() => {
+        setPreviewVisible(true);
+      }, 0);
     } catch (error) {
       Alert.alert('失败', error instanceof Error ? error.message : '预览失败');
     } finally {
       setBusyAction(null);
     }
-  }, [buildQuoteSaveArtifacts, ensureSaveSelections, normalizedLines, pageBusy, saveCompanyName, saveOptionsVisible, selectedTemplateDoc, validateQuoteBeforeSave]);
+  }, [buildQuoteSaveArtifacts, dismissQuoteTransientUi, ensureSaveSelections, normalizedLines, pageBusy, saveCompanyName, saveOptionsVisible, selectedTemplateDoc, validateQuoteBeforeSave]);
 
   const handleExport = useCallback(async () => {
     if (pageBusy || !saveOptionsVisible) return;
+    dismissQuoteTransientUi();
     if (!validateQuoteBeforeSave(normalizedLines)) return;
     if (!ensureSaveSelections()) return;
 
@@ -1178,12 +1207,12 @@ export function OfferScreen() {
       const shareFileName = `${artifacts.orderNumber || `quote_${Date.now()}`}.xlsx`;
 
       if (Platform.OS === 'web') {
-        await exportQuoteToExcelInBrowser(artifacts.payload, shareFileName);
+        await exportQuoteToExcelInBrowser(artifacts.exportPayload, shareFileName);
         Alert.alert('成功', 'Excel 已开始下载');
         return;
       }
 
-      const raw = await exportQuoteToExcel(artifacts.payload);
+      const raw = await exportQuoteToExcel(artifacts.exportPayload);
       const buffer =
         raw instanceof ArrayBuffer
           ? raw
@@ -1228,10 +1257,11 @@ export function OfferScreen() {
     } finally {
       setBusyAction(null);
     }
-  }, [buildQuoteSaveArtifacts, ensureSaveSelections, normalizedLines, pageBusy, saveCompanyName, saveOptionsVisible, validateQuoteBeforeSave]);
+  }, [buildQuoteSaveArtifacts, dismissQuoteTransientUi, ensureSaveSelections, normalizedLines, pageBusy, saveCompanyName, saveOptionsVisible, validateQuoteBeforeSave]);
 
   const handlePrint = useCallback(async () => {
     if (pageBusy || !saveOptionsVisible) return;
+    dismissQuoteTransientUi();
     if (!validateQuoteBeforeSave(normalizedLines)) return;
     if (!ensureSaveSelections()) return;
 
@@ -1259,17 +1289,18 @@ export function OfferScreen() {
     } finally {
       setBusyAction(null);
     }
-  }, [buildQuoteSaveArtifacts, ensureSaveSelections, normalizedLines, pageBusy, saveCompanyName, saveOptionsVisible, selectedTemplateDoc, validateQuoteBeforeSave]);
+  }, [buildQuoteSaveArtifacts, dismissQuoteTransientUi, ensureSaveSelections, normalizedLines, pageBusy, saveCompanyName, saveOptionsVisible, selectedTemplateDoc, validateQuoteBeforeSave]);
 
   const handleSaveQuote = useCallback(async () => {
     if (pageBusy || !saveOptionsVisible) return;
+    dismissQuoteTransientUi();
     if (!validateQuoteBeforeSave(normalizedLines)) return;
     if (!ensureSaveSelections()) return;
 
     setBusyAction('save');
     try {
       const artifacts = buildQuoteSaveArtifacts(saveCompanyName);
-      const data = await createQuote(artifacts.payload);
+      const data = await createQuote(artifacts.savePayload);
       const body = data && typeof data === 'object' ? (data as Record<string, unknown>) : undefined;
       const success = body?.success;
       if (success === false || success === 'false' || success === 0) {
@@ -1282,7 +1313,14 @@ export function OfferScreen() {
     } finally {
       setBusyAction(null);
     }
-  }, [buildQuoteSaveArtifacts, clearWorkspace, ensureSaveSelections, normalizedLines, pageBusy, saveCompanyName, saveOptionsVisible, validateQuoteBeforeSave]);
+  }, [buildQuoteSaveArtifacts, clearWorkspace, dismissQuoteTransientUi, ensureSaveSelections, normalizedLines, pageBusy, saveCompanyName, saveOptionsVisible, validateQuoteBeforeSave]);
+
+  const handleClosePreview = useCallback(() => {
+    setPreviewVisible(false);
+    setTimeout(() => {
+      setSaveOptionsVisible(true);
+    }, 0);
+  }, []);
 
   const confirmCancelCurrent = useCallback(() => {
     if (!customerKeyword.trim() && lines.length === 0) {
@@ -1342,7 +1380,6 @@ export function OfferScreen() {
                 customerInputFocused && styles.customerComboInputOuterFocused,
               ]}
               onPress={focusCustomerInput}
-              onPressIn={focusCustomerInput}
             >
               <TextInput
                 ref={customerInputRef}
@@ -1394,7 +1431,11 @@ export function OfferScreen() {
                             pressed && styles.customerComboRowPressed,
                           ]}
                           onPressIn={cancelCustomerBlur}
-                          onPress={() => fillCustomerFromRow(row)}
+                          onPress={() => {
+                            cancelCustomerBlur();
+                            fillCustomerFromRow(row);
+                            customerInputRef.current?.blur();
+                          }}
                         >
                           <Text style={styles.customerComboName}>{name}</Text>
                           {sub ? <Text style={styles.customerComboSub}>{sub}</Text> : null}
@@ -1571,7 +1612,7 @@ export function OfferScreen() {
         visible={previewVisible}
         template={previewTemplate}
         previewData={previewData}
-        onClose={() => setPreviewVisible(false)}
+        onClose={handleClosePreview}
       />
 
       <AddCustomerModal

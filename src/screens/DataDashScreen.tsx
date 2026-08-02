@@ -63,8 +63,17 @@ type DashTab = 'overview' | 'product' | 'customer';
 function normalizeList(raw: unknown): QuoteRecord[] {
   if (Array.isArray(raw)) return raw as QuoteRecord[];
   if (raw && typeof raw === 'object') {
-    const data = (raw as { data?: unknown }).data;
-    if (Array.isArray(data)) return data as QuoteRecord[];
+    const container = raw as {
+      data?: unknown;
+      list?: unknown;
+      rows?: unknown;
+      records?: unknown;
+      result?: unknown;
+    };
+    const candidates = [container.data, container.list, container.rows, container.records, container.result];
+    for (const candidate of candidates) {
+      if (Array.isArray(candidate)) return candidate as QuoteRecord[];
+    }
   }
   return [];
 }
@@ -811,9 +820,11 @@ function ProductTopBarChart({
 function CustomerTrendMultiChart({
   points,
   width,
+  scopeLabel,
 }: {
   points: { label: string; newCount: number; activeCount: number; dormantCount: number }[];
   width: number;
+  scopeLabel: string;
 }) {
   const height = 168;
   const padL = 38;
@@ -895,7 +906,7 @@ function CustomerTrendMultiChart({
   if (points.length === 0) {
     return (
       <View style={[styles.chartCardInner, { height: height + 24 }]}>
-        <Text style={styles.muted}>暂无趋势数据（请确认本月内有报价且报价日期字段可用）</Text>
+        <Text style={styles.muted}>暂无趋势数据（请确认{scopeLabel}内有报价且报价日期字段可用）</Text>
       </View>
     );
   }
@@ -1017,6 +1028,7 @@ export function DataDashScreen() {
   const [loading, setLoading] = useState(true);
   const [list, setList] = useState<QuoteRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [dataScopeLabel, setDataScopeLabel] = useState<'本月' | '本年'>('本月');
 
   const [detailCache, setDetailCache] = useState<Record<string, unknown>>({});
 
@@ -1038,19 +1050,31 @@ export function DataDashScreen() {
     setLoading(true);
     setError(null);
     const now = new Date();
-    const start = formatDate(startOfMonth(now));
-    const end = formatDate(endOfMonth(now));
     try {
-      const raw = await fetchQuoteData({
-        startDate: start,
-        endDate: end,
+      const monthRaw = await fetchQuoteData({
+        startDate: formatDate(startOfMonth(now)),
+        endDate: formatDate(endOfMonth(now)),
       });
-      setList(mergeQuotesByOrderNo(normalizeList(raw)));
+      const monthList = mergeQuotesByOrderNo(normalizeList(monthRaw));
+
+      if (monthList.length > 0) {
+        setDataScopeLabel('本月');
+        setList(monthList);
+      } else {
+        const yearRaw = await fetchQuoteData({
+          startDate: formatDate(new Date(now.getFullYear(), 0, 1)),
+          endDate: formatDate(now),
+        });
+        setDataScopeLabel('本年');
+        setList(mergeQuotesByOrderNo(normalizeList(yearRaw)));
+      }
+
       setDetailCache({});
       setProductAggMap({});
       setProductAnalysisDone(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : '加载失败');
+      setDataScopeLabel('本月');
       setList([]);
     } finally {
       setLoading(false);
@@ -1350,13 +1374,13 @@ export function DataDashScreen() {
                   <Text style={[styles.summaryValue, styles.summaryMoney]} numberOfLines={1}>
                     {metrics.totalAmount.toFixed(2)} 元
                   </Text>
-                  <Text style={styles.summaryMeta}>总金额 · 本期总收入</Text>
+                  <Text style={styles.summaryMeta}>总金额 · {dataScopeLabel}总收入</Text>
                 </View>
                 <View style={[styles.summaryCard, styles.summaryAccentBlue]}>
                   <Text style={styles.summaryValue} numberOfLines={1}>
                     {metrics.customerCount}
                   </Text>
-                  <Text style={styles.summaryMeta}>报价客户 · 活跃客户数</Text>
+                  <Text style={styles.summaryMeta}>报价客户 · {dataScopeLabel}活跃客户数</Text>
                 </View>
                 <View style={[styles.summaryCard, styles.summaryAccentOrange]}>
                   <Text style={styles.summaryValue} numberOfLines={1}>
@@ -1439,7 +1463,7 @@ export function DataDashScreen() {
             <Text style={styles.blockTitle}>热销排名 TOP10</Text>
             {productLoading ? <ActivityIndicator style={styles.loader} /> : null}
             {!productLoading && productAnalysisDone && Object.keys(productAggMap).length === 0 ? (
-              <Text style={styles.muted}>暂无产品明细，请确认本月内有报价且明细接口可用。</Text>
+              <Text style={styles.muted}>暂无产品明细，请确认{dataScopeLabel}内有报价且明细接口可用。</Text>
             ) : null}
             <ProductTopBarChart items={productTopBarItems} width={productChartW} />
           </View>
@@ -1548,7 +1572,11 @@ export function DataDashScreen() {
                 <Text style={styles.blockTitle}>
                   {customerTrendUnit === 'month' ? '客户趋势分析（本年度月度数据）' : '客户趋势分析（本年度季度数据）'}
                 </Text>
-                <CustomerTrendMultiChart points={customerAnalysis.trendPoints} width={customerChartW} />
+                <CustomerTrendMultiChart
+                  points={customerAnalysis.trendPoints}
+                  width={customerChartW}
+                  scopeLabel={dataScopeLabel}
+                />
               </View>
 
               <View style={styles.card}>

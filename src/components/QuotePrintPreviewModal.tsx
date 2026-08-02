@@ -1,6 +1,7 @@
 import { createElement } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Dimensions, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PrintTemplateCanvas } from './printTemplate/PrintTemplateCanvas';
 import type { PreviewRecord } from './printTemplate/RenderTemplateViews';
 import type { TemplateDoc } from '../types/printTemplate';
@@ -15,6 +16,8 @@ type Props = {
 };
 
 export function QuotePrintPreviewModal({ visible, template, previewData, onClose }: Props) {
+  const insets = useSafeAreaInsets();
+
   if (!template || !previewData) return null;
 
   const normalizedTemplate = normalizeTemplateLayout(template);
@@ -26,10 +29,10 @@ export function QuotePrintPreviewModal({ visible, template, previewData, onClose
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.previewWrap}>
+      <View style={[styles.previewWrap, { paddingTop: Math.max(insets.top, 16) + 12 }]}>
         <View style={styles.previewBar}>
           <Text style={styles.previewTitle}>打印预览</Text>
-          <Pressable onPress={onClose} hitSlop={12}>
+          <Pressable style={styles.previewCloseBtn} onPress={onClose} hitSlop={16}>
             <Ionicons name="close" size={26} color="#fff" />
           </Pressable>
         </View>
@@ -71,7 +74,6 @@ const styles = StyleSheet.create({
   previewWrap: {
     flex: 1,
     backgroundColor: '#0f172a',
-    paddingTop: 28,
   },
   previewBar: {
     flexDirection: 'row',
@@ -79,6 +81,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingBottom: 12,
+  },
+  previewCloseBtn: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 22,
   },
   previewTitle: {
     color: '#fff',
